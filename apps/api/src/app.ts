@@ -1,12 +1,12 @@
 import path from 'node:path';
-import Fastify, { type FastifyError, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { LogController, type FastifyError, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyWebsocket from '@fastify/websocket';
 import type { AppContext } from './context.js';
 import { sendProblem } from './lib/problem.js';
 import { sha256Hex } from './lib/auth.js';
 import { eq, and, isNull } from 'drizzle-orm';
-import { apiTokens, sessions } from './db/schema.js';
+import { apiTokens, sessions, users } from './db/schema.js';
 import { SESSION_TTL_MS } from '@bahn/shared';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAltchaRoutes } from './routes/altcha.js';
@@ -17,6 +17,7 @@ import { registerNetRoutes } from './routes/net.js';
 import { registerWsRoutes } from './routes/ws.js';
 import { registerSpeedRoutes } from './routes/speed.js';
 import { registerPublicRoutes } from './routes/public.js';
+import { registerAdminRoutes } from './routes/admin.js';
 import { registerStaticRoutes } from './routes/static.js';
 
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'DELETE', 'PUT']);
@@ -30,7 +31,8 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   const app = Fastify({
     trustProxy: ctx.cfg.TRUST_PROXY,
     bodyLimit: 1024 * 1024, // 1 MiB Standard, /api/speed/up überschreibt das pro Route
-    disableRequestLogging: true,
+    // Ersetzt das deprecated `disableRequestLogging`-Top-Level-Flag (entfällt in fastify@6).
+    logController: new LogController({ disableRequestLogging: true }),
     logger: { level: ctx.cfg.NODE_ENV === 'test' ? 'silent' : 'info' },
   });
 
@@ -116,6 +118,17 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
     }
   });
 
+  app.decorate('requireAdmin', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.userId) {
+      sendProblem(reply, 401, 'Nicht angemeldet');
+      return;
+    }
+    const rows = await ctx.db.select({ role: users.role }).from(users).where(eq(users.id, request.userId)).limit(1);
+    if (rows[0]?.role !== 'admin') {
+      sendProblem(reply, 403, 'Nur für Admins');
+    }
+  });
+
   app.setErrorHandler((err: FastifyError, request, reply) => {
     const status = typeof err.statusCode === 'number' && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
     if (status >= 500) {
@@ -135,6 +148,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   registerWsRoutes(app);
   registerSpeedRoutes(app);
   registerPublicRoutes(app);
+  registerAdminRoutes(app);
   registerStaticRoutes(app, path.resolve(import.meta.dirname, '..'));
 
   return app;

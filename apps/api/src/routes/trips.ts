@@ -1,9 +1,9 @@
 import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { latLngToCell } from 'h3-js';
-import { Sample, TripCreate, TripEnd, type NetClass, type Trip } from '@bahn/shared';
-import { samples, trips } from '../db/schema.js';
+import { Sample, TripCreate, TripEnd, type NetClass, type Trip, type TripSample, type TripSamples } from '@bahn/shared';
+import { asnCatalog, samples, trips } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { verifyNetToken } from '../lib/netToken.js';
@@ -71,6 +71,75 @@ export function registerTripRoutes(app: FastifyInstance): void {
       return;
     }
     reply.send(toTrip(row.trip, Number(row.sampleCount)));
+  });
+
+  app.get('/api/trips/:id/samples', { preHandler: app.requireAuth }, async (request, reply) => {
+    const { id: tripId } = request.params as { id: string };
+    const tripRows = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.userId, request.userId!)))
+      .limit(1);
+    const trip = tripRows[0];
+    if (!trip) {
+      sendProblem(reply, 404, 'Fahrt nicht gefunden');
+      return;
+    }
+
+    const sampleRows = await db
+      .select()
+      .from(samples)
+      .where(eq(samples.tripId, tripId))
+      .orderBy(asc(samples.ts));
+
+    const tripSamples: TripSample[] = sampleRows.map((s) => ({
+      id: s.id,
+      ts: s.ts.toISOString(),
+      kind: s.kind as TripSample['kind'],
+      lat: s.lat,
+      lon: s.lon,
+      accuracyM: s.accuracyM,
+      speedMps: s.speedMps,
+      n: s.n,
+      lost: s.lost,
+      rttMedian: s.rttMedian,
+      rttP90: s.rttP90,
+      jitterMs: s.jitterMs,
+      downBps: s.downBps,
+      upBps: s.upBps,
+      rttLoadedMs: s.rttLoadedMs,
+      httpMs: s.httpMs,
+      ok: s.ok,
+      captive: s.captive,
+      asn: s.asn,
+      netClass: s.netClass as NetClass,
+      flags: s.flags,
+    }));
+
+    const asnStats = await db
+      .select({
+        asn: samples.asn,
+        netClass: samples.netClass,
+        name: asnCatalog.name,
+        samples: sql<number>`count(${samples.id})`.as('n_samples'),
+      })
+      .from(samples)
+      .leftJoin(asnCatalog, eq(asnCatalog.asn, samples.asn))
+      .where(and(eq(samples.tripId, tripId), isNotNull(samples.asn)))
+      .groupBy(samples.asn, samples.netClass, asnCatalog.name)
+      .orderBy(desc(sql`count(${samples.id})`));
+
+    const response: TripSamples = {
+      trip: toTrip(trip, sampleRows.length),
+      samples: tripSamples,
+      asns: asnStats.map((r) => ({
+        asn: r.asn as number,
+        name: r.name ?? `ASN ${r.asn}`,
+        netClass: r.netClass as NetClass,
+        samples: Number(r.samples),
+      })),
+    };
+    reply.send(response);
   });
 
   app.post('/api/trips/:id/end', { preHandler: app.requireAuth }, async (request, reply) => {

@@ -7,3 +7,4 @@ build/
 infra/tiles/data/
 *.log
 .DS_Store
+infra/dev/.env

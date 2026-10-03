@@ -18,7 +18,9 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
   Nutzer wird beim Bestätigen angelegt, falls neu.
 - `POST /api/auth/confirm` Body `ConfirmRequest` → `200 Me` + Set-Cookie. Token ungültig/abgelaufen → `400`.
 - `POST /api/auth/logout` → `204`, löscht Session. `POST /api/auth/logout-all` → `204`.
-- `GET /api/me` → `200 Me` oder `401`.
+- `GET /api/me` → `200 Me` oder `401`. Setzt dabei `role='admin'`, falls die E-Mail in
+  `ADMIN_EMAILS` steht (ebenso bei `POST /api/auth/confirm`); die Rolle wird nie automatisch
+  wieder entfernt.
 - `PATCH /api/me` Body `MeUpdate` (ALTCHA Pflicht) → `200 Me`; Name bereits vergeben → `409`.
 - `DELETE /api/me` → `204`, löscht Nutzer samt Fahrten/Samples (Cascade).
 - `GET /api/me/export` → JSON `{ user, trips: [{...trip, samples: [...] }] }`.
@@ -38,6 +40,17 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
     `implausible_speed` (Distanz/Zeit zum letzten Sample der Fahrt > MAX_SPEED_MPS), `clock_skew`
     (korrigierte ts weicht > 24 h von Serverzeit ab). Rejected nur bei Schemafehlern einzelner Samples.
   - aktualisiert `trips.last_sample_at`.
+- `GET /api/trips/:id/samples` → `200 TripSamples` (nur eigene, sonst 404): `{ trip, samples, asns }`.
+  `samples` enthält alle Samples der Fahrt in zeitlicher Reihenfolge (reduzierte Felder, siehe
+  Schema `TripSample`), `asns` die je ASN gesehenen Samples (`asn`, `name`, `netClass`, `samples`).
+
+## Admin (Auth + Rolle `admin` Pflicht, sonst `401`/`403`)
+- `GET /api/admin/asns?filter=unknown|all` → `200 AdminAsn[]`, sortiert nach `seen` absteigend.
+  Je ASN zusätzlich Anzahl Samples und (verschiedener) Fahrten.
+- `PATCH /api/admin/asns/:asn` Body `AdminAsnUpdate` (`{ netClass }`) → `200 AdminAsnUpdateResponse`
+  (`{ asn: AdminAsn, samplesUpdated }`). Setzt `source='admin'`, `reviewedAt=now()`, aktualisiert die
+  In-Memory-Klasse im `AsnService` sofort und schreibt `net_class` auf alle bestehenden `samples`
+  dieser ASN zurück, **außer** solche mit Flag `net_sig_invalid`.
 
 ## Netz
 - `GET /api/net/whoami` → `200 WhoamiResponse`. Client-IP aus Socket bzw. `X-Forwarded-For` (nur wenn
@@ -76,5 +89,8 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
 - `MAILPIT_UPSTREAM` gesetzt → `/mailpit/*` Reverse-Proxy (inkl. WebSocket) auf Mailpit (Webroot `/mailpit`).
 
 ## Logging
-Fastify-Logger mit `disableRequestLogging: true`; eigener onResponse-Hook loggt nur Methode, Route (nicht URL mit
-Query), Status, Dauer. Keine Header, keine IPs, keine E-Mail-Adressen in Logs.
+Fastify-Logger mit `logController: new LogController({ disableRequestLogging: true })` (ersetzt das in
+Fastify 5.12 deprecated Top-Level-Flag `disableRequestLogging`); eigener onResponse-Hook loggt nur
+Methode, Route (nicht URL mit Query), Status, Dauer. Keine Header, keine IPs, keine E-Mail-Adressen in Logs.
+Der Postgres-Client (`postgres.js`) unterdrückt NOTICE-Ausgaben (`onnotice: () => {}`), damit Migrationen
+(z.B. `relation already exists, skipping`) nicht im Log/Terminal erscheinen.

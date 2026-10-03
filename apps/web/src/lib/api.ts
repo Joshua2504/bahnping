@@ -3,6 +3,8 @@
 // weitergeworfen.
 import { z } from 'zod';
 import {
+	AdminAsn,
+	AdminAsnUpdateResponse,
 	CellsResponse,
 	ConfirmRequest,
 	Me,
@@ -14,7 +16,9 @@ import {
 	SampleBatchResponse,
 	Trip,
 	TripEnd,
+	TripSamples,
 	WhoamiResponse,
+	type AdminAsnUpdate,
 	type CellsQuery,
 	type TripCreate,
 } from '@bahn/shared';
@@ -94,6 +98,7 @@ export const api = {
 	createTrip: (body: TripCreate) => request('/api/trips', withBody('POST', body), Trip),
 	listTrips: () => request('/api/trips', {}, z.array(Trip)),
 	getTrip: (id: string) => request(`/api/trips/${id}`, {}, Trip),
+	getTripSamples: (id: string) => request(`/api/trips/${id}/samples`, {}, TripSamples),
 	endTrip: (id: string, body: TripEndBody) => request(`/api/trips/${id}/end`, withBody('POST', body), Trip),
 	uploadSamples: (id: string, samples: Sample[]) =>
 		request(`/api/trips/${id}/samples`, withBody('POST', { samples }), SampleBatchResponse),
@@ -114,4 +119,9 @@ export const api = {
 	},
 	publicStats: () => request('/api/public/stats', {}, PublicStats),
 	publicLive: () => request('/api/public/live', {}, z.object({ activeTrips: z.number().int() })),
+
+	adminAsns: (filter: 'unknown' | 'all') =>
+		request(`/api/admin/asns?filter=${filter}`, {}, z.array(AdminAsn)),
+	adminUpdateAsn: (asn: number, body: AdminAsnUpdate) =>
+		request(`/api/admin/asns/${asn}`, withBody('PATCH', body), AdminAsnUpdateResponse),
 };

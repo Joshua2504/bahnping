@@ -23,9 +23,20 @@ const Env = z.object({
   NETCLASS_OVERRIDES: z.string().default(''),
   WEB_DIST: z.string().optional(),
   TILES_DIR: z.string().optional(),
+  /** Kommagetrennte E-Mail-Adressen, die beim Login/`/api/me` automatisch Admin-Rolle erhalten. */
+  ADMIN_EMAILS: z.string().default(''),
 });
 
 export type Config = z.infer<typeof Env>;
+
+/** Normalisierte, lowercase Admin-E-Mail-Liste aus `ADMIN_EMAILS`. */
+export function adminEmailSet(cfg: Config): Set<string> {
+  return new Set(
+    cfg.ADMIN_EMAILS.split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);

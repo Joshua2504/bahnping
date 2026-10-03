@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 mkdir -p .run
 [ -f .env ] || cp .env.example .env
+[ -f infra/dev/.env ] || { echo "MAILPIT_UI_AUTH=joshua:$(node -e "console.log(require('crypto').randomBytes(12).toString('base64url'))")" > infra/dev/.env; echo "Mailpit-Zugang in infra/dev/.env angelegt"; }
 PORT="$(grep -E '^PORT=' .env | cut -d= -f2)"; PORT="${PORT:-4100}"
 docker compose -f infra/dev/compose.yml up -d --wait
 pnpm --filter @bahn/shared build

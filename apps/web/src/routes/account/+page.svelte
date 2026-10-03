@@ -145,7 +145,7 @@
 				<tbody>
 					{#each trips as trip (trip.id)}
 						<tr>
-							<td>{new Date(trip.startedAt).toLocaleString('de-DE')}</td>
+							<td><a href={`/trips/${trip.id}`}>{new Date(trip.startedAt).toLocaleString('de-DE')}</a></td>
 							<td>{TRAIN_TYPE_LABELS[trip.trainType]}</td>
 							<td>{trip.trainNumber ?? '–'}</td>
 							<td>{statusLabel(trip.status)}</td>

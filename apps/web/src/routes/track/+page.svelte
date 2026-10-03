@@ -131,6 +131,14 @@
 			<div class="stat">
 				<div class="stat__label">Netz</div>
 				<div class="stat__value" style="font-size: 1.1rem">{tracker.net.label ?? '–'}</div>
+				<div style="font-size: 0.8rem; color: var(--fg-dim)">
+					{#if tracker.net.asn !== null}
+						AS{tracker.net.asn}{tracker.net.asName ? ` · ${tracker.net.asName}` : ''}
+					{/if}
+					{#if tracker.net.ipVersion !== null}
+						· IPv{tracker.net.ipVersion}
+					{/if}
+				</div>
 			</div>
 			<div class="stat">
 				<div class="stat__label">Letzter Speedtest</div>
@@ -151,12 +159,32 @@
 			</div>
 		</div>
 
+		{#if tracker.netHistory.length > 0}
+			<div class="card">
+				<div class="stat__label">Netz-Verlauf (letzte {tracker.netHistory.length})</div>
+				<ul style="margin: 0.4rem 0 0; padding-left: 1.2rem">
+					{#each tracker.netHistory as entry (entry.asn)}
+						<li>
+							AS{entry.asn}{entry.asName ? ` · ${entry.asName}` : ''}
+							– seit {new Date(entry.firstSeenAt).toLocaleTimeString('de-DE')}
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
+
 		{#if tracker.geo.error}
 			<div class="notice warn">Standort: {tracker.geo.error}</div>
 		{/if}
 	</div>
 {:else}
 	<h1>Fahrt-Modus</h1>
+
+	{#if tracker.lastEndedTripId}
+		<div class="notice success">
+			Fahrt beendet. <a href={`/trips/${tracker.lastEndedTripId}`}>Fahrt ansehen</a>
+		</div>
+	{/if}
 
 	{#if tracker.resumeAvailable}
 		<div class="card">

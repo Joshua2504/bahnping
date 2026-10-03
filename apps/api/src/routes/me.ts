@@ -5,6 +5,7 @@ import { samples, trips, users } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { verifyAltchaSolution } from '../lib/altcha.js';
+import { ensureAdminRole } from '../lib/admin.js';
 
 function toMe(row: typeof users.$inferSelect): Me {
   return {
@@ -21,11 +22,13 @@ export function registerMeRoutes(app: FastifyInstance): void {
 
   app.get('/api/me', { preHandler: app.requireAuth }, async (request, reply) => {
     const rows = await db.select().from(users).where(eq(users.id, request.userId!)).limit(1);
-    const user = rows[0];
+    let user = rows[0];
     if (!user) {
       sendProblem(reply, 401, 'Nicht angemeldet');
       return;
     }
+    const role = await ensureAdminRole(db, cfg, user.id, user.email, user.role);
+    if (role !== user.role) user = { ...user, role };
     reply.send(toMe(user));
   });
 

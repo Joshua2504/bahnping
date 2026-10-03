@@ -147,6 +147,11 @@ export class AsnService {
     return this.classMap.get(asn) ?? { netClass: 'unknown', name: '' };
   }
 
+  /** Aktualisiert die In-Memory-Klasse für eine ASN (nach Admin-Review), ohne die DB erneut zu lesen. */
+  setClass(asn: number, entry: ClassEntry): void {
+    this.classMap.set(asn, entry);
+  }
+
   async loadClassMap(db: Db): Promise<void> {
     const rows = await db.select().from(asnCatalog);
     const map = new Map<number, ClassEntry>();

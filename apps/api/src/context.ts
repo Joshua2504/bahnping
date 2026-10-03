@@ -27,5 +27,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     ctx: AppContext;
     requireAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

@@ -42,9 +42,20 @@ export interface RttPoint {
 interface NetDisplay {
 	label: string | null;
 	asName: string | null;
+	asn: number | null;
+	ipVersion: 4 | 6 | null;
 	connType: string | null;
 	effectiveType: string | null;
 }
+
+/** Ein Eintrag im Netz-Verlauf: ASN mit Zeitpunkt des ersten Auftretens in dieser Fahrt. */
+export interface NetHistoryEntry {
+	asn: number;
+	asName: string | null;
+	firstSeenAt: number;
+}
+
+const NET_HISTORY_MAX = 5;
 
 interface SpeedtestEntry {
 	downBps: number | null;
@@ -62,7 +73,7 @@ const EMPTY_GEO: GeoState = {
 	error: null,
 };
 
-const EMPTY_NET: NetDisplay = { label: null, asName: null, connType: null, effectiveType: null };
+const EMPTY_NET: NetDisplay = { label: null, asName: null, asn: null, ipVersion: null, connType: null, effectiveType: null };
 
 class Tracker {
 	active = $state(false);
@@ -83,7 +94,11 @@ class Tracker {
 
 	geo = $state<GeoState>(EMPTY_GEO);
 	net = $state<NetDisplay>(EMPTY_NET);
+	/** Die letzten bis zu 5 unterschiedlichen ASNs dieser Fahrt, nur im Client-Zustand (nicht persistiert). */
+	netHistory = $state<NetHistoryEntry[]>([]);
 	captive = $state(false);
+	/** Fahrt-ID der zuletzt beendeten Fahrt, für den „Fahrt ansehen“-Link. */
+	lastEndedTripId = $state<string | null>(null);
 
 	lastSpeedtest = $state<SpeedtestEntry | null>(null);
 	speedtestProgress = $state<SpeedtestProgress | null>(null);
@@ -164,6 +179,7 @@ class Tracker {
 			this.errors = [...this.errors, 'Fahrt konnte nicht serverseitig beendet werden, Daten sind lokal gepuffert.'];
 		}
 
+		this.lastEndedTripId = tripId;
 		this.tripId = null;
 	}
 
@@ -253,6 +269,8 @@ class Tracker {
 		this.lossPct60s = null;
 		this.availabilityPct = null;
 		this.errors = [];
+		this.netHistory = [];
+		this.lastEndedTripId = null;
 		this.writeStorage({ ...stored, clockOffsetMs });
 
 		this.windowAgg = new PingWindowAggregator((w) => this.handleWindow(w));
@@ -265,8 +283,16 @@ class Tracker {
 		void this.wakeLock.start();
 
 		this.netWhoami = new NetWhoami((s) => {
-			this.net = { label: s.label, asName: s.asName, connType: s.connType, effectiveType: s.effectiveType };
+			this.net = {
+				label: s.label,
+				asName: s.asName,
+				asn: s.token?.asn ?? null,
+				ipVersion: s.token?.ipVersion ?? null,
+				connType: s.connType,
+				effectiveType: s.effectiveType,
+			};
 			this.recentNetToken = s.token;
+			this.recordNetHistory(s.token?.asn ?? null, s.asName);
 		});
 		this.netWhoami.start();
 
@@ -305,6 +331,13 @@ class Tracker {
 		this.availabilityPct = this.windowResults.length > 0 ? (100 * withData) / this.windowResults.length : null;
 
 		void this.pushSample(this.makePingSample(w));
+	}
+
+	/** Hält die letzten NET_HISTORY_MAX unterschiedlichen ASNs mit Erstauftreten fest (nur im RAM). */
+	private recordNetHistory(asn: number | null, asName: string | null): void {
+		if (asn === null) return;
+		if (this.netHistory.some((e) => e.asn === asn)) return;
+		this.netHistory = [...this.netHistory, { asn, asName, firstSeenAt: Date.now() }].slice(-NET_HISTORY_MAX);
 	}
 
 	private makeBase() {

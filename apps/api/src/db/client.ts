@@ -4,7 +4,8 @@ import * as schema from './schema.js';
 
 /** Erzeugt Postgres-Client + Drizzle-Instanz. Eine Instanz pro Prozess (bzw. pro Test). */
 export function createDb(databaseUrl: string) {
-  const client = postgres(databaseUrl, { max: 10 });
+  // Unterdrückt Postgres-NOTICE-Ausgaben (z.B. beim Migrieren: "relation already exists, skipping").
+  const client = postgres(databaseUrl, { max: 10, onnotice: () => {} });
   const db = drizzle(client, { schema });
   return { client, db };
 }

@@ -12,12 +12,13 @@
 		void auth.load();
 	});
 
-	const links = [
+	const links = $derived([
 		{ href: '/', label: 'Start' },
 		{ href: '/track', label: 'Fahrt' },
 		{ href: '/map', label: 'Karte' },
 		{ href: '/account', label: 'Konto' },
-	];
+		...(auth.me?.role === 'admin' ? [{ href: '/admin', label: 'Admin' }] : []),
+	]);
 </script>
 
 <svelte:head>

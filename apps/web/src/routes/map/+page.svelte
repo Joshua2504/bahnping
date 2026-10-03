@@ -2,10 +2,9 @@
 	// Öffentliche Karte: MapLibre + PMTiles-Basemap (Protomaps) + H3-Zellen aus /api/public/cells.
 	import { onDestroy, onMount } from 'svelte';
 	import { cellToBoundary } from 'h3-js';
-	import maplibregl, { type ExpressionSpecification, type LayerSpecification } from 'maplibre-gl';
+	import maplibregl, { type ExpressionSpecification } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { Protocol } from 'pmtiles';
-	import { layers, namedFlavor } from '@protomaps/basemaps';
+	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import {
 		METRICS,
 		NET_CLASSES,
@@ -184,24 +183,15 @@
 	});
 
 	onMount(() => {
-		const protocol = new Protocol();
-		maplibregl.addProtocol('pmtiles', protocol.tile);
+		ensurePmtilesProtocol();
 
-		const tilesUrl = `pmtiles://${location.origin}/tiles/basemap.pmtiles`;
 		const m = new maplibregl.Map({
 			container: mapContainer as HTMLDivElement,
-			center: [10.4, 51.2],
-			zoom: 6,
-			style: {
-				version: 8,
-				glyphs: '/tiles/fonts/{fontstack}/{range}.pbf',
-				sprite: `${location.origin}/tiles/sprites/v4/black`,
-				sources: {
-					protomaps: { type: 'vector', url: tilesUrl, attribution: '© OpenStreetMap-Mitwirkende' },
-					cells: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
-				},
-				layers: [
-					...(layers('protomaps', namedFlavor('black'), { lang: 'de' }) as LayerSpecification[]),
+			center: DEFAULT_CENTER,
+			zoom: DEFAULT_ZOOM,
+			style: createBaseStyle(
+				{ cells: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+				[
 					{
 						id: 'cells-fill',
 						type: 'fill',
@@ -215,7 +205,7 @@
 						paint: { 'line-color': '#000000', 'line-opacity': 0.15, 'line-width': 0.5 },
 					},
 				],
-			},
+			),
 		});
 		map = m;
 

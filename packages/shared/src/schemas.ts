@@ -198,6 +198,67 @@ export const PublicStats = z.object({
 });
 export type PublicStats = z.infer<typeof PublicStats>;
 
+// ---------- Admin ----------
+
+export const AdminAsn = z.object({
+  asn: z.number().int(),
+  name: z.string(),
+  netClass: NetClass,
+  source: z.string(),
+  seen: z.number().int(),
+  reviewedAt: z.string().nullable(),
+  samples: z.number().int(),
+  trips: z.number().int(),
+});
+export type AdminAsn = z.infer<typeof AdminAsn>;
+
+export const AdminAsnUpdate = z.object({ netClass: NetClass });
+export type AdminAsnUpdate = z.infer<typeof AdminAsnUpdate>;
+export const AdminAsnUpdateResponse = z.object({ asn: AdminAsn, samplesUpdated: z.number().int() });
+export type AdminAsnUpdateResponse = z.infer<typeof AdminAsnUpdateResponse>;
+
+// ---------- Fahrtdetail ----------
+
+export const TripSample = z.object({
+  id: z.uuid(),
+  ts: z.string(),
+  kind: z.enum(['ping_window', 'speedtest', 'probe']),
+  lat: z.number().nullable(),
+  lon: z.number().nullable(),
+  accuracyM: z.number().nullable(),
+  speedMps: z.number().nullable(),
+  n: z.number().int().nullable(),
+  lost: z.number().int().nullable(),
+  rttMedian: z.number().nullable(),
+  rttP90: z.number().nullable(),
+  jitterMs: z.number().nullable(),
+  downBps: z.number().nullable(),
+  upBps: z.number().nullable(),
+  rttLoadedMs: z.number().nullable(),
+  httpMs: z.number().nullable(),
+  ok: z.boolean().nullable(),
+  captive: z.boolean().nullable(),
+  asn: z.number().int().nullable(),
+  netClass: NetClass,
+  flags: z.array(z.string()),
+});
+export type TripSample = z.infer<typeof TripSample>;
+
+export const TripSamplesAsn = z.object({
+  asn: z.number().int(),
+  name: z.string(),
+  netClass: NetClass,
+  samples: z.number().int(),
+});
+export type TripSamplesAsn = z.infer<typeof TripSamplesAsn>;
+
+export const TripSamples = z.object({
+  trip: Trip,
+  samples: z.array(TripSample),
+  asns: z.array(TripSamplesAsn),
+});
+export type TripSamples = z.infer<typeof TripSamples>;
+
 /** RFC 9457 Problem Details */
 export const Problem = z.object({
   type: z.string().default('about:blank'),

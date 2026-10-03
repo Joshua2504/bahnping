@@ -24,6 +24,8 @@ services:
       MP_WEBROOT: /mailpit
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      # Basic Auth für Web-UI und API, Wert "user:passwort" aus infra/dev/.env
+      MP_UI_AUTH: ${MAILPIT_UI_AUTH:?MAILPIT_UI_AUTH in infra/dev/.env setzen}
     ports:
       - "127.0.0.1:4125:1025"
       - "127.0.0.1:4126:8025"

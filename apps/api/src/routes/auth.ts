@@ -6,6 +6,7 @@ import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { verifyAltchaSolution } from '../lib/altcha.js';
 import { allowMagicLinkSend, sendMagicLinkMail } from '../lib/mail.js';
+import { ensureAdminRole } from '../lib/admin.js';
 import {
   createSession,
   deleteAllSessionsForUser,
@@ -75,6 +76,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       const inserted = await db.insert(users).values({ email: link.email }).returning();
       user = inserted[0];
     }
+    const role = await ensureAdminRole(db, cfg, user.id, user.email, user.role);
+    if (role !== user.role) user = { ...user, role };
 
     const { token, expiresAt } = await createSession(db, user.id, null);
     reply.setCookie('bt_session', token, sessionCookieOptions(cfg.PUBLIC_URL, expiresAt.getTime() - Date.now()));
