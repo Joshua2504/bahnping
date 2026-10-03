@@ -1,0 +1,14 @@
+{
+  "name": "bahn-netzwerk-tracker",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "dev:infra": "docker compose -f infra/dev/compose.yml up -d",
+    "dev:api": "pnpm --filter @bahn/api dev",
+    "dev:web": "pnpm --filter @bahn/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "start": "scripts/dev-up.sh",
+    "stop": "scripts/dev-down.sh"
+  }
+}

@@ -1,0 +1,19 @@
+{
+	"name": "Bahn-Netzwerk-Tracker",
+	"short_name": "Bahn-Tracker",
+	"description": "Misst Netzqualität in Zügen (DB-WLAN und Mobilfunk) und zeigt die Ergebnisse als öffentliche Heatmap.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#000000",
+	"theme_color": "#000000",
+	"lang": "de",
+	"icons": [
+		{
+			"src": "/icon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any maskable"
+		}
+	]
+}

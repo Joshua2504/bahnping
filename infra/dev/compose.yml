@@ -1,0 +1,31 @@
+# Entwicklungs-/Testumgebung: nur Postgres und Mailpit. API und Web laufen direkt per Node auf dem Host.
+name: bahn-tracker-dev
+services:
+  db:
+    image: postgis/postgis:17-3.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bahn
+      POSTGRES_PASSWORD: bahn
+      POSTGRES_DB: bahn
+    ports:
+      - "127.0.0.1:4132:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bahn -d bahn"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  mailpit:
+    image: axllent/mailpit:v1.31
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mailpit
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:4125:1025"
+      - "127.0.0.1:4126:8025"
+volumes:
+  dbdata:

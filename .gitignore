@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+.svelte-kit/
+.run/
+.env
+infra/tiles/data/
+*.log
+.DS_Store
