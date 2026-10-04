@@ -218,6 +218,7 @@ func (s *trackSession) updateIcePortalDisplay() {
 
 	s.state.Update(func(sn *tui.Snapshot) {
 		sn.IcePortalAvailable = st != nil
+		sn.IcePortalError = s.poller.LastError()
 		sn.NextStopName = nextStopName
 		sn.NextStopDelayMin = delayMin
 		if st == nil {

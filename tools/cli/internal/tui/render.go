@@ -62,7 +62,8 @@ func Render(w io.Writer, s Snapshot, first bool) {
 	line := func(format string, args ...any) {
 		fmt.Fprintf(&b, format, args...)
 		b.WriteString(ansiClearLine)
-		b.WriteString("\n")
+		// Im Raw-Mode gibt es keine automatische Wagenrücklauf-Umsetzung, daher \r\n.
+		b.WriteString("\r\n")
 	}
 
 	dur := time.Duration(0)
@@ -104,7 +105,11 @@ func Render(w io.Writer, s Snapshot, first bool) {
 		line("ICE-Portal verfügbar  Geschwindigkeit %s  Status %s", speed, state)
 		line("Nächster Halt %s  Verspätung %s", next, delay)
 	} else {
-		line("ICE-Portal nicht verfügbar")
+		if s.IcePortalError != "" {
+			line("ICE-Portal nicht verfügbar: %s", s.IcePortalError)
+		} else {
+			line("ICE-Portal nicht verfügbar")
+		}
 	}
 	posSrc := s.PosSource
 	if posSrc == "" {

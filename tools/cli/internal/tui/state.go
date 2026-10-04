@@ -31,10 +31,12 @@ type Snapshot struct {
 	IPVersion *int
 
 	IcePortalAvailable bool
-	IceSpeedKmh        *float64
-	IceState           string
-	NextStopName       string
-	NextStopDelayMin   *int
+	// Letzter Fehler beim Abruf des ICE-Portals (kurz, für die Anzeige)
+	IcePortalError   string
+	IceSpeedKmh      *float64
+	IceState         string
+	NextStopName     string
+	NextStopDelayMin *int
 
 	PosLat    *float64
 	PosLon    *float64

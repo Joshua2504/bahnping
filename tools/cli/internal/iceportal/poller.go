@@ -28,6 +28,8 @@ type Poller struct {
 	trip            *TripInfo
 	tripAvailable   bool
 
+	lastErr string
+
 	statusPrinted bool
 	tripPrinted   bool
 	printMu       sync.Mutex
@@ -46,6 +48,7 @@ func (p *Poller) Start(ctx context.Context) {
 		if err != nil {
 			p.mu.Lock()
 			p.statusAvailable = false
+			p.lastErr = ShortError(err)
 			p.mu.Unlock()
 			return err
 		}
@@ -53,6 +56,7 @@ func (p *Poller) Start(ctx context.Context) {
 		p.mu.Lock()
 		p.status = st
 		p.statusAvailable = true
+		p.lastErr = ""
 		p.mu.Unlock()
 		return nil
 	})
@@ -100,6 +104,13 @@ func (p *Poller) runLoop(ctx context.Context, _ string, normalInterval time.Dura
 		}
 		interval = normalInterval
 	}
+}
+
+// LastError liefert den letzten Abruffehler des Status-Endpunkts ("" wenn der letzte Abruf klappte).
+func (p *Poller) LastError() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.lastErr
 }
 
 // Status liefert den letzten erfolgreich abgefragten Status und ob der Provider aktuell

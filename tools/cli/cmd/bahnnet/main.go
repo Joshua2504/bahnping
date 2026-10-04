@@ -37,6 +37,8 @@ func main() {
 		err = cmdWhoami(args)
 	case "track":
 		err = cmdTrack(args)
+	case "diag":
+		err = cmdDiag(args)
 	case "version", "-v", "--version":
 		fmt.Printf("bahnnet %s\n", version)
 	case "help", "-h", "--help":
@@ -58,6 +60,7 @@ func printUsage() {
 Verwendung:
   bahnnet login <server-url>   Bei einem Server anmelden (API-Token wird abgefragt)
   bahnnet logout               Lokale Anmeldung entfernen
+  bahnnet diag                 ICE-Portal und Zug-WLAN-Endpunkte prüfen (Diagnose)
   bahnnet whoami                Konto- und Netzinformationen anzeigen
   bahnnet track [optionen]      Fahrt starten und messen
   bahnnet version               Version anzeigen

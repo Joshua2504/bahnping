@@ -19,7 +19,7 @@ const (
 	DefaultBaseURL = "https://iceportal.de"
 	statusPath     = "/api1/rs/status"
 	tripPath       = "/api1/rs/tripInfo/trip"
-	requestTimeout = 3 * time.Second
+	requestTimeout = 5 * time.Second
 )
 
 // ---------- Defensive JSON-Helfer ----------
@@ -313,6 +313,8 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnnet")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -323,9 +325,31 @@ func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("ICE-Portal antwortete mit %d", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return data, nil
+}
+
+// ShortError macht aus Netzwerkfehlern eine kurze, verständliche Meldung für die Anzeige.
+func ShortError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "no such host"):
+		return "DNS: iceportal.de nicht auflösbar (kein ICE-WLAN?)"
+	case strings.Contains(msg, "deadline exceeded"), strings.Contains(msg, "Timeout"):
+		return "Zeitüberschreitung"
+	case strings.Contains(msg, "connection refused"):
+		return "Verbindung abgelehnt"
+	case strings.Contains(msg, "certificate"), strings.Contains(msg, "x509"):
+		return "TLS-Zertifikat ungültig"
+	}
+	if len(msg) > 80 {
+		msg = msg[:80] + "…"
+	}
+	return msg
 }
 
 // FetchStatus ruft GET /api1/rs/status ab.
