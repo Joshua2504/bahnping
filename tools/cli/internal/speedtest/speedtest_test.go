@@ -103,3 +103,44 @@ func TestSlowLinkStopsAtDeadlineWithPartialResult(t *testing.T) {
 		t.Fatalf("Upload ohne Ergebnis trotz Teilübertragung: %v", up)
 	}
 }
+
+// Upload darf nicht schneller erscheinen als der Server tatsächlich liest: Früher wurden Bytes
+// beim Einlesen in Transport-Puffer gezählt, was bei langsamem Uplink einen festen Wert ergab.
+func TestUploadNotInflatedByBuffers(t *testing.T) {
+	oldDuration, oldRamp := duration, rampUp
+	duration, rampUp = 2*time.Second, 300*time.Millisecond
+	t.Cleanup(func() { duration, rampUp = oldDuration, oldRamp })
+
+	api, _ := newServer(t, true)
+	up := Upload(context.Background(), api)
+	if up == nil {
+		t.Fatal("Upload ohne Ergebnis")
+	}
+	// Server liest je Stream 16 KiB pro ≥20 ms, bei 4 Streams also höchstens ~26 Mbit/s.
+	const serverMaxBps = 4 * 16 * 1024 * 8 / 0.020
+	if *up > serverMaxBps*1.2 {
+		t.Fatalf("Upload %.1f Mbit/s über dem, was der Server lesen kann (%.1f Mbit/s)", *up/1e6, serverMaxBps/1e6)
+	}
+	if *up < serverMaxBps*0.3 {
+		t.Fatalf("Upload %.1f Mbit/s unplausibel niedrig (Server max. %.1f Mbit/s)", *up/1e6, serverMaxBps/1e6)
+	}
+}
+
+func TestNextUpChunk(t *testing.T) {
+	cases := []struct {
+		size int64
+		took time.Duration
+		want int64
+	}{
+		{256 * 1024, 250 * time.Millisecond, 512 * 1024},  // zu schnell: höchstens verdoppeln
+		{256 * 1024, 4 * time.Second, 128 * 1024},         // zu langsam: höchstens halbieren
+		{256 * 1024, 1 * time.Second, 256 * 1024},         // Zielzeit getroffen
+		{32 * 1024, 10 * time.Second, 32 * 1024},          // Untergrenze
+		{4 * 1024 * 1024, 10 * time.Millisecond, 4 << 20}, // Obergrenze
+	}
+	for _, c := range cases {
+		if got := nextUpChunk(c.size, c.took); got != c.want {
+			t.Errorf("nextUpChunk(%d, %v) = %d, erwartet %d", c.size, c.took, got, c.want)
+		}
+	}
+}

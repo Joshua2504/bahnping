@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	// chunkBytes ist die Blockgröße je Download-Request.
 	chunkBytes = 4 * 1024 * 1024
 	streams    = model.SpeedtestStreams
 )
@@ -51,8 +52,7 @@ func (c *rampCounter) add(n int) {
 	c.mu.Unlock()
 }
 
-// countingReader zählt beim Lesen mit. Beim Download sind das empfangene Bytes, beim Upload
-// die Bytes, die der HTTP-Transport gerade abschickt (wie xhr.upload.onprogress im Browser).
+// countingReader zählt beim Lesen empfangene Bytes mit (Download).
 type countingReader struct {
 	r io.Reader
 	c *rampCounter
@@ -130,9 +130,15 @@ func randomBlock(n int) ([]byte, error) {
 	return buf, nil
 }
 
-// Upload führt den Upload-Teil aus (4 parallele POST /api/speed/up mit 4-MiB-Zufallsblöcken).
+// Upload führt den Upload-Teil aus (4 parallele Folgen von POST /api/speed/up).
+//
+// Gezählt werden nur Blöcke, deren Antwort vom Server kam. Bytes beim Lesen aus dem Body zu
+// zählen misst nur Puffer: Der HTTP/2-Transport liest je Stream sofort bis zu 512 KiB, bei
+// langsamem Uplink ergab das unabhängig vom Netz immer 4 × 512 KiB in 8 s ≈ 2,1 Mbit/s.
+// Die Blockgröße passt sich an, damit ein Block etwa SpeedtestUpTargetMs dauert; als Zeitbasis
+// dient die volle Testdauer, noch laufende Blöcke fallen weg (eher konservativ).
 func Upload(ctx context.Context, api *apiclient.Client) *float64 {
-	block, err := randomBlock(chunkBytes)
+	block, err := randomBlock(model.SpeedtestUpChunkMaxBytes)
 	if err != nil {
 		return nil
 	}
@@ -140,8 +146,6 @@ func Upload(ctx context.Context, api *apiclient.Client) *float64 {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(ctx, start.Add(duration))
 	defer cancel()
-	// Bytes werden beim Senden gezählt, nicht erst nach komplettem Block: Bei langsamem
-	// Uplink wird ein 4-MiB-Block oft gar nicht fertig, das Ergebnis wäre sonst leer.
 	counter := &rampCounter{rampEnd: start.Add(rampUp)}
 	var budgetMu sync.Mutex
 	budget := int64(model.SpeedtestMaxBytes)
@@ -151,26 +155,37 @@ func Upload(ctx context.Context, api *apiclient.Client) *float64 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			size := int64(model.SpeedtestUpChunkStartBytes)
 			for ctx.Err() == nil {
 				budgetMu.Lock()
-				n := int64(len(block))
-				if n > budget {
-					n = budget
-				}
+				n := min(size, budget)
 				budget -= n
 				budgetMu.Unlock()
 				if n <= 0 {
 					return
 				}
-				body := countingReader{bytes.NewReader(block[:n]), counter}
-				if err := api.SpeedUp(ctx, body, n); err != nil {
+				reqStart := time.Now()
+				if err := api.SpeedUp(ctx, bytes.NewReader(block[:n]), n); err != nil {
 					return
 				}
+				counter.add(int(n))
+				size = nextUpChunk(size, time.Since(reqStart))
 			}
 		}()
 	}
 	wg.Wait()
 	return bpsFromCounts(counter.total, counter.post, time.Since(start))
+}
+
+// nextUpChunk skaliert die Blockgröße Richtung SpeedtestUpTargetMs, höchstens Faktor 2 je Schritt.
+func nextUpChunk(size int64, took time.Duration) int64 {
+	target := time.Duration(model.SpeedtestUpTargetMs) * time.Millisecond
+	next := size * 2
+	if took > 0 {
+		next = min(int64(float64(size)*float64(target)/float64(took)), size*2)
+	}
+	next = max(next, size/2)
+	return min(max(next, model.SpeedtestUpChunkMinBytes), model.SpeedtestUpChunkMaxBytes)
 }
 
 // Run führt Download- und Upload-Test hintereinander aus und liefert ein Result.

@@ -1,7 +1,15 @@
 // Download-/Upload-Durchsatztest gegen /api/speed/* (siehe docs/API.md, PLANUNG.md 6.4).
 // RTT (idle/loaded) wird NICHT hier gemessen, sondern vom Aufrufer aus der WS-RTT-Historie
 // anhand von startedAt/endedAt berechnet.
-import { SPEEDTEST_DURATION_MS, SPEEDTEST_MAX_BYTES, SPEEDTEST_STREAMS } from '@bahn/shared';
+import {
+	SPEEDTEST_DURATION_MS,
+	SPEEDTEST_MAX_BYTES,
+	SPEEDTEST_STREAMS,
+	SPEEDTEST_UP_CHUNK_MAX_BYTES,
+	SPEEDTEST_UP_CHUNK_MIN_BYTES,
+	SPEEDTEST_UP_CHUNK_START_BYTES,
+	SPEEDTEST_UP_TARGET_MS,
+} from '@bahn/shared';
 import { api } from '../api.js';
 
 export type SpeedtestPhase = 'quota' | 'download' | 'upload' | 'done' | 'error';
@@ -22,7 +30,7 @@ export interface SpeedtestResult {
 
 /** Erste Sekunde (Verbindungsaufbau/Ramp-up) wird aus der Durchsatzberechnung ausgeschlossen. */
 const RAMP_UP_MS = 1000;
-/** Größe je Request. Streams fordern so lange neue Blöcke an, bis die Testdauer um ist. */
+/** Größe je Download-Request. Streams fordern so lange neue Blöcke an, bis die Testdauer um ist. */
 const CHUNK_BYTES = 4 * 1024 * 1024;
 
 /** Zählt Bytes getrennt nach Anlaufphase und Messphase und merkt sich den Zeitpunkt des letzten Bytes. */
@@ -81,13 +89,14 @@ export class SpeedtestRunner {
 		} finally {
 			clearInterval(reportTimer);
 		}
-		const bps = counter.bps();
+		// Upload zählt nur bestätigte Blöcke; Zeitbasis ist die volle Testdauer, nicht der letzte Block.
+		const bps = direction === 'upload' ? counter.bps(Math.min(performance.now(), deadline)) : counter.bps();
 		onBps(bps);
 		return bps;
 	}
 
-	private take(budget: { left: number }): number {
-		const n = Math.min(CHUNK_BYTES, budget.left);
+	private take(budget: { left: number }, size = CHUNK_BYTES): number {
+		const n = Math.min(size, budget.left);
 		budget.left -= n;
 		return n;
 	}
@@ -115,18 +124,27 @@ export class SpeedtestRunner {
 		}
 	}
 
+	/**
+	 * Zählt nur Blöcke, die der Server bestätigt hat. xhr.upload.onprogress meldet, was im Puffer
+	 * des Browsers/Betriebssystems liegt, nicht was angekommen ist – bei langsamem Uplink stark
+	 * überhöht. Die Blockgröße passt sich an, damit ein Block etwa SPEEDTEST_UP_TARGET_MS dauert.
+	 */
 	private async uploadLoop(counter: Counter, deadline: number, budget: { left: number }): Promise<void> {
+		let size = SPEEDTEST_UP_CHUNK_START_BYTES;
 		while (performance.now() < deadline) {
-			const n = this.take(budget);
+			const n = this.take(budget, size);
 			if (n <= 0) break;
-			await this.uploadOnce(counter, deadline, this.blob().slice(0, n));
+			const reqStart = performance.now();
+			if (!(await this.uploadOnce(deadline, this.blob().slice(0, n)))) break;
+			counter.add(n);
+			size = nextUpChunk(size, performance.now() - reqStart);
 		}
 	}
 
-	private uploadOnce(counter: Counter, deadline: number, body: Blob): Promise<void> {
+	/** true, wenn der Server den Block vollständig angenommen hat. */
+	private uploadOnce(deadline: number, body: Blob): Promise<boolean> {
 		return new Promise((resolve) => {
 			const xhr = new XMLHttpRequest();
-			let previousLoaded = 0;
 			const timeout = setTimeout(() => {
 				try {
 					xhr.abort();
@@ -134,13 +152,9 @@ export class SpeedtestRunner {
 					// bereits beendet
 				}
 			}, Math.max(0, deadline - performance.now()));
-			xhr.upload.addEventListener('progress', (e) => {
-				counter.add(e.loaded - previousLoaded);
-				previousLoaded = e.loaded;
-			});
 			xhr.addEventListener('loadend', () => {
 				clearTimeout(timeout);
-				resolve();
+				resolve(xhr.status >= 200 && xhr.status < 300);
 			});
 			xhr.open('POST', '/api/speed/up');
 			xhr.setRequestHeader('content-type', 'application/octet-stream');
@@ -148,13 +162,20 @@ export class SpeedtestRunner {
 		});
 	}
 
-	/** Ein 4-MiB-Blob aus wiederholten 256-KiB-Zufallsblöcken, einmal pro Runner erzeugt. */
+	/** Ein Blob (SPEEDTEST_UP_CHUNK_MAX_BYTES) aus wiederholten 256-KiB-Zufallsblöcken, einmal pro Runner erzeugt. */
 	private blob(): Blob {
 		if (!this.uploadBlob) {
 			const piece = new Uint8Array(256 * 1024);
 			for (let o = 0; o < piece.length; o += 65_536) crypto.getRandomValues(piece.subarray(o, o + 65_536));
-			this.uploadBlob = new Blob(Array.from({ length: CHUNK_BYTES / piece.length }, () => piece));
+			this.uploadBlob = new Blob(Array.from({ length: SPEEDTEST_UP_CHUNK_MAX_BYTES / piece.length }, () => piece));
 		}
 		return this.uploadBlob;
 	}
+}
+
+/** Skaliert die Upload-Blockgröße Richtung SPEEDTEST_UP_TARGET_MS, höchstens Faktor 2 je Schritt. */
+export function nextUpChunk(size: number, tookMs: number): number {
+	let next = tookMs > 0 ? Math.min(Math.round((size * SPEEDTEST_UP_TARGET_MS) / tookMs), size * 2) : size * 2;
+	next = Math.max(next, Math.floor(size / 2));
+	return Math.min(Math.max(next, SPEEDTEST_UP_CHUNK_MIN_BYTES), SPEEDTEST_UP_CHUNK_MAX_BYTES);
 }

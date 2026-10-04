@@ -16,6 +16,11 @@ const (
 	SpeedtestDurationMs = 8000
 	SpeedtestStreams    = 4
 	SpeedtestMaxBytes   = 50 * 1024 * 1024
+	// Adaptive Upload-Blockgröße (siehe SPEEDTEST_UP_* in constants.ts).
+	SpeedtestUpChunkStartBytes = 256 * 1024
+	SpeedtestUpChunkMinBytes   = 32 * 1024
+	SpeedtestUpChunkMaxBytes   = 4 * 1024 * 1024
+	SpeedtestUpTargetMs        = 1000
 	// SpeedtestContinuousPauseMs ist die Pause zwischen zwei Tests im Dauer-Speedtest.
 	SpeedtestContinuousPauseMs = 5000
 	BatchMaxSamples            = 500

@@ -196,8 +196,10 @@ Kein ICMP im Browser. Stattdessen:
 - Download: 4 parallele `fetch`-Streams auf `/api/speed/down?bytes=…`, Server liefert vorgenerierte
   Zufallsblöcke (`Content-Encoding: identity`, Caddy-Kompression für diesen Pfad aus). Messung über
   `ReadableStream`, Dauer 8 s, die erste Sekunde (Ramp-up) wird verworfen.
-- Upload: 4 parallele `XMLHttpRequest`-POSTs mit Zufalls-`ArrayBuffer` (XHR wegen `upload.onprogress`),
-  Server verwirft Body nach Zählen. 8 s.
+- Upload: 4 parallele Folgen von POSTs mit Zufallsdaten, Server verwirft Body nach Zählen. 8 s.
+  Gezählt werden nur vom Server bestätigte Blöcke (nicht `upload.onprogress` bzw. gelesene Bytes:
+  das misst nur Puffer, bei HTTP/2 bis 512 KiB je Stream). Blockgröße adaptiv (`SPEEDTEST_UP_*`,
+  Start 256 KiB, 32 KiB–4 MiB, Ziel ~1 s je Block); noch laufende Blöcke zählen nicht (konservativ).
 - Ergebnis als `speedtest`-Sample mit `down_bps, up_bps, rtt_idle, rtt_loaded` (Bufferbloat-Indikator).
 - Server steht in Deutschland, keine CDN-Anycast-Verfälschung. Gemessen wird bewusst der gesamte Pfad
   inkl. Zug-Backhaul (das ist der Flaschenhals, der die Nutzer:innen interessiert).

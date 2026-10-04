@@ -14,6 +14,15 @@ export const SPEEDTEST_DURATION_MS = 8000;
 export const SPEEDTEST_STREAMS = 4;
 /** Harte Obergrenze je Richtung und Test. */
 export const SPEEDTEST_MAX_BYTES = 50 * 1024 * 1024;
+/**
+ * Upload-Blockgröße je Request, adaptiv: Start, Untergrenze, Obergrenze. Gezählt werden nur vom
+ * Server bestätigte Blöcke (Fortschritts-Events zählen nur, was in Puffern liegt). Ein Block soll
+ * etwa SPEEDTEST_UP_TARGET_MS dauern, damit auch bei langsamem Uplink mehrere Blöcke fertig werden.
+ */
+export const SPEEDTEST_UP_CHUNK_START_BYTES = 256 * 1024;
+export const SPEEDTEST_UP_CHUNK_MIN_BYTES = 32 * 1024;
+export const SPEEDTEST_UP_CHUNK_MAX_BYTES = 4 * 1024 * 1024;
+export const SPEEDTEST_UP_TARGET_MS = 1000;
 /** Pause zwischen zwei Tests im Dauer-Speedtest; genug Ping-Werte für die Leerlauf-RTT (rttIdleMs). */
 export const SPEEDTEST_CONTINUOUS_PAUSE_MS = 5000;
 export const BATCH_MAX_SAMPLES = 500;
