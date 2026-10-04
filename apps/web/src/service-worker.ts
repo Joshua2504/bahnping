@@ -1,7 +1,8 @@
 // Service Worker für die PWA. In SvelteKit 3 ersetzt durch $app/manifest ($service-worker ist entfernt):
 // `immutable`/`assets` liefern die zu cachenden Dateien, `version` aus $app/env für den Cache-Namen.
-// /api, /ws, /mailpit, /tiles werden nie gecacht (Network-only); Navigationen fallen auf index.html
-// zurück (Cache-first), damit die SPA auch offline startet.
+// /api, /ws, /mailpit, /tiles werden nie gecacht (Network-only). Navigationen laufen Network-first
+// (frische index.html nach jedem Update) und fallen nur offline auf die gecachte Shell zurück.
+// Ein neuer Service Worker übernimmt sofort (skipWaiting), statt auf das Schließen aller Tabs zu warten.
 /// <reference lib="webworker" />
 import { assets, immutable } from '$app/manifest';
 import { version } from '$app/env';
@@ -21,6 +22,7 @@ self.addEventListener('install', (event) => {
 		(async () => {
 			const cache = await caches.open(CACHE_NAME);
 			await cache.addAll(PRECACHE_PATHS);
+			await self.skipWaiting();
 		})(),
 	);
 });
@@ -44,16 +46,16 @@ self.addEventListener('fetch', (event) => {
 	if (isNeverCached(url.pathname)) return; // Network-only, nie cachen.
 
 	if (request.mode === 'navigate') {
-		// Cache-first: SPA-Shell sofort aus dem Cache, Fallback auf index.html für alle Routen.
+		// Network-first: frische Shell vom Server, offline Fallback auf die gecachte index.html.
 		event.respondWith(
 			(async () => {
 				const cache = await caches.open(CACHE_NAME);
-				const cached = (await cache.match(request)) ?? (await cache.match('/'));
-				if (cached) return cached;
 				try {
-					return await fetch(request);
+					const response = await fetch(request, { cache: 'no-cache' });
+					if (response.ok) void cache.put('/', response.clone());
+					return response;
 				} catch {
-					return Response.error();
+					return (await cache.match('/')) ?? Response.error();
 				}
 			})(),
 		);

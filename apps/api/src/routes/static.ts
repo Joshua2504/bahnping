@@ -24,7 +24,22 @@ export function registerStaticRoutes(app: FastifyInstance, apiRoot: string): voi
   }
 
   if (webDist) {
-    app.register(fastifyStatic, { root: webDist, prefix: '/', decorateReply: true });
+    // Gehashte Dateien unter _app/immutable dürfen ewig gecacht werden; alles andere (index.html,
+    // service-worker.js, _app/version.json, Manifest, Icons) muss bei jedem Laden revalidiert werden,
+    // sonst sieht der Browser ein Update erst nach hartem Reload.
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+      decorateReply: true,
+      cacheControl: false,
+      setHeaders: (res, filePath) => {
+        const rel = path.relative(webDist!, filePath).split(path.sep).join('/');
+        res.setHeader(
+          'cache-control',
+          rel.startsWith('_app/immutable/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+        );
+      },
+    });
     app.setNotFoundHandler((request, reply) => {
       const url = request.raw.url ?? '';
       const isReserved = reservedPrefixes.some((p) => url === p || url.startsWith(`${p}/`) || url.startsWith(`${p}?`));

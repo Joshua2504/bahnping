@@ -3,7 +3,8 @@
 	import 'altcha';
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
-	import { page } from '$app/state';
+	import { page, updated } from '$app/state';
+	import { beforeNavigate } from '$app/navigation';
 	import { auth } from '#lib/auth.svelte.js';
 	import { theme } from '#lib/theme.svelte.js';
 	import { i18n } from '#lib/i18n.svelte.js';
@@ -17,6 +18,24 @@
 	$effect(() => theme.apply());
 	$effect(() => i18n.apply());
 
+	// Neue Version deployt (SvelteKit prüft _app/version.json bei Fokus und stündlich): beim nächsten
+	// Seitenwechsel voll neu laden, damit kein alter Code weiterläuft. Während einer Fahrt nicht
+	// erzwingen (Reload beendet GPS/WebSocket), dann nur der Hinweis mit Neu-laden-Knopf.
+	function tripRunning(): boolean {
+		try {
+			// Schlüssel wie STORAGE_KEY in #lib/tracker/tracker.svelte.ts (Import würde den Tracker starten).
+			return localStorage.getItem('bahn-tracker:activeTrip') !== null;
+		} catch {
+			return false;
+		}
+	}
+
+	beforeNavigate(({ willUnload, to }) => {
+		if (updated.current && !willUnload && to?.url && !tripRunning()) {
+			location.href = to.url.href;
+		}
+	});
+
 	const de = {
 		start: 'Start',
 		track: 'Fahrt',
@@ -27,6 +46,8 @@
 		login: 'Anmelden',
 		theme: { system: 'Farbmodus: System', light: 'Farbmodus: Hell', dark: 'Farbmodus: Dunkel' },
 		switchLang: 'Switch to English',
+		updateAvailable: 'Neue Version verfügbar.',
+		reload: 'Neu laden',
 	};
 	const en: typeof de = {
 		start: 'Home',
@@ -38,6 +59,8 @@
 		login: 'Sign in',
 		theme: { system: 'Colour mode: system', light: 'Colour mode: light', dark: 'Colour mode: dark' },
 		switchLang: 'Auf Deutsch umschalten',
+		updateAvailable: 'A new version is available.',
+		reload: 'Reload',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
 
@@ -86,6 +109,27 @@
 		</div>
 	</nav>
 	<main class="app-main">
+		{#if updated.current}
+			<div class="notice update-notice">
+				<span>{m.updateAvailable}</span>
+				<button class="btn secondary" onclick={() => location.reload()}>{m.reload}</button>
+			</div>
+		{/if}
 		{@render children()}
 	</main>
 </div>
+
+<style>
+	.update-notice {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border-color: var(--info);
+	}
+
+	.update-notice .btn {
+		padding: 0.4rem 0.8rem;
+		font-size: 0.9rem;
+	}
+</style>
