@@ -33,6 +33,7 @@ import {
 	type SmtpTestRequest,
 	type TripCreate,
 } from '@bahn/shared';
+import { i18n } from './i18n.svelte.js';
 
 type MagicLinkRequestBody = z.infer<typeof MagicLinkRequest>;
 type ConfirmRequestBody = z.infer<typeof ConfirmRequest>;
@@ -74,11 +75,15 @@ async function request<T>(path: string, init: RequestInit = {}, schema?: z.ZodTy
 			headers: init.body ? { 'content-type': 'application/json', ...init.headers } : init.headers,
 		});
 	} catch {
-		throw new ApiError(0, 'Netzwerkfehler', 'Die Anfrage konnte nicht gesendet werden.');
+		throw new ApiError(
+			0,
+			i18n.locale === 'de' ? 'Netzwerkfehler' : 'Network error',
+			i18n.locale === 'de' ? 'Die Anfrage konnte nicht gesendet werden.' : 'The request could not be sent.',
+		);
 	}
 
 	if (!res.ok) {
-		let title = res.statusText || 'Fehler';
+		let title = res.statusText || (i18n.locale === 'de' ? 'Fehler' : 'Error');
 		let detail: string | undefined;
 		const retryAfterHeader = res.headers.get('retry-after');
 		const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : undefined;

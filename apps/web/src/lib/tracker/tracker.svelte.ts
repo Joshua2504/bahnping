@@ -9,6 +9,7 @@ import {
 	type TrainType,
 } from '@bahn/shared';
 import { api, ApiError, type TripSampleExt } from '../api.js';
+import { i18n } from '../i18n.svelte.js';
 import { GeoTracker, type GeoState } from './geo.js';
 import { NetWhoami } from './net.js';
 import { Outbox, type OutboxStatus } from './outbox.js';
@@ -112,6 +113,21 @@ const EMPTY_GEO: GeoState = {
 };
 
 const EMPTY_NET: NetDisplay = { label: null, asName: null, asn: null, ipVersion: null, connType: null, effectiveType: null };
+
+// Nutzersichtbare Statustexte, sprachabhängig (siehe `msg()`).
+const de = {
+	endTripFailed: 'Fahrt konnte nicht serverseitig beendet werden, Daten sind lokal gepuffert.',
+	speedtestCooldownActive: 'Speedtest-Pause aktiv',
+	speedtestFailed: 'Speedtest fehlgeschlagen',
+};
+const en: typeof de = {
+	endTripFailed: 'Ride could not be ended on the server, data is buffered locally.',
+	speedtestCooldownActive: 'Speedtest cooldown active',
+	speedtestFailed: 'Speedtest failed',
+};
+function msg(): typeof de {
+	return i18n.locale === 'de' ? de : en;
+}
 
 class Tracker {
 	active = $state(false);
@@ -233,7 +249,7 @@ class Tracker {
 			await this.outbox.flushTrip(tripId);
 			await api.endTrip(tripId, { clockOffsetMs: this.clockOffsetMs ?? undefined });
 		} catch {
-			this.errors = [...this.errors, 'Fahrt konnte nicht serverseitig beendet werden, Daten sind lokal gepuffert.'];
+			this.errors = [...this.errors, msg().endTripFailed];
 		}
 
 		this.lastEndedTripId = tripId;
@@ -266,11 +282,11 @@ class Tracker {
 			void this.pushSample(sample);
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 429) {
-				this.speedtestCooldownUntil = Date.now() + (err.retryAfterSec ?? 120) * 1000;
-				this.speedtestProgress = { phase: 'error', error: 'Speedtest-Pause aktiv', retryAfterSec: err.retryAfterSec };
+				this.speedtestCooldownUntil = Date.now() + (err.retryAfterSec ?? 30) * 1000;
+				this.speedtestProgress = { phase: 'error', error: msg().speedtestCooldownActive, retryAfterSec: err.retryAfterSec };
 			} else {
-				this.speedtestProgress = { phase: 'error', error: 'Speedtest fehlgeschlagen' };
-				this.errors = [...this.errors, 'Speedtest fehlgeschlagen'];
+				this.speedtestProgress = { phase: 'error', error: msg().speedtestFailed };
+				this.errors = [...this.errors, msg().speedtestFailed];
 			}
 		}
 	}

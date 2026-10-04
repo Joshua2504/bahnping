@@ -6,10 +6,45 @@
 	import { onDestroy, onMount } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { ICE_STATE_LABELS, NET_CLASS_LABELS, type LiveTrain } from '@bahn/shared';
+	import { type LiveTrain } from '@bahn/shared';
 	import { ApiError, api } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { rttColorExpression } from '#lib/map/colors.js';
+	import { i18n, iceStateLabel, netClassLabel } from '#lib/i18n.svelte.js';
+
+	const de = {
+		heading: 'Jetzt unterwegs',
+		showLive: 'Live-Fahrten anzeigen',
+		loading: 'Lade…',
+		activeTrips: (n: number) => `${n} Fahrt${n === 1 ? '' : 'en'} aktiv`,
+		loadError: 'Live-Fahrten konnten nicht geladen werden',
+		empty: 'Gerade fährt niemand mit eingeschalteter Live-Ansicht – oder alle Fahrten sind noch zu neu für eine Position. Schau später wieder vorbei.',
+		hidden: 'Live-Karte ist ausgeblendet.',
+		popup: {
+			speed: 'Geschwindigkeit',
+			loss: 'Verlust',
+			iceState: 'ICE-Status',
+			dash: '–',
+			ago: (s: number | string) => `vor ${s} s`,
+		},
+	};
+	const en: typeof de = {
+		heading: 'On the move now',
+		showLive: 'Show live rides',
+		loading: 'Loading…',
+		activeTrips: (n: number) => `${n} ride${n === 1 ? '' : 's'} active`,
+		loadError: 'Live rides could not be loaded',
+		empty: 'Nobody is currently riding with the live view switched on – or all rides are still too new for a position. Check back later.',
+		hidden: 'Live map is hidden.',
+		popup: {
+			speed: 'Speed',
+			loss: 'loss',
+			iceState: 'ICE status',
+			dash: '–',
+			ago: (s: number | string) => `${s} s ago`,
+		},
+	};
+	const t = $derived(i18n.locale === 'de' ? de : en);
 
 	const STORAGE_KEY = 'bahn-tracker:liveMapEnabled';
 	const POLL_MS = 15_000;
@@ -90,7 +125,7 @@
 			loadError = null;
 			if (created) updateTrains();
 		} catch (err) {
-			loadError = err instanceof ApiError ? (err.detail ?? err.title) : 'Live-Fahrten konnten nicht geladen werden';
+			loadError = err instanceof ApiError ? (err.detail ?? err.title) : t.loadError;
 		}
 	}
 
@@ -119,19 +154,19 @@
 		const netLines = nets
 			.map(
 				(n) =>
-					`${NET_CLASS_LABELS[n.netClass]}: RTT ${n.rttMedian !== null ? n.rttMedian.toFixed(0) : '–'} ms, Verlust ${
-						n.lossPct !== null ? n.lossPct.toFixed(0) : '–'
+					`${netClassLabel(n.netClass)}: RTT ${n.rttMedian !== null ? n.rttMedian.toFixed(0) : t.popup.dash} ms, ${t.popup.loss} ${
+						n.lossPct !== null ? n.lossPct.toFixed(0) : t.popup.dash
 					} %`,
 			)
 			.join('<br />');
 		const iceState = p.iceState as string | null;
 		return `
 			<strong>${p.label}</strong><br />
-			Geschwindigkeit: ${p.speedKmh !== null && p.speedKmh !== undefined ? Number(p.speedKmh).toFixed(0) : '–'} km/h<br />
+			${t.popup.speed}: ${p.speedKmh !== null && p.speedKmh !== undefined ? Number(p.speedKmh).toFixed(0) : t.popup.dash} km/h<br />
 			${netLines}
 			${netLines ? '<br />' : ''}
-			ICE-Status: ${iceState ? ICE_STATE_LABELS[iceState] ?? iceState : '–'}<br />
-			vor ${p.lastSeenSec} s
+			${t.popup.iceState}: ${iceState ? iceStateLabel(iceState) : t.popup.dash}<br />
+			${t.popup.ago(p.lastSeenSec as number | string)}
 		`;
 	}
 
@@ -230,19 +265,19 @@
 
 <div class="card live-map" bind:this={sectionEl}>
 	<div class="live-map__header">
-		<h2>Jetzt unterwegs</h2>
+		<h2>{t.heading}</h2>
 		<label class="live-map__toggle">
 			<input type="checkbox" checked={enabled} onchange={toggleEnabled} style="width: auto; min-height: auto" />
-			Live-Fahrten anzeigen
+			{t.showLive}
 		</label>
 	</div>
 
 	{#if enabled}
 		<p class="live-map__count">
 			{#if activeTrips === null && !loadError}
-				Lade…
+				{t.loading}
 			{:else}
-				{activeTrips ?? 0} Fahrt{activeTrips === 1 ? '' : 'en'} aktiv
+				{t.activeTrips(activeTrips ?? 0)}
 			{/if}
 		</p>
 
@@ -254,12 +289,11 @@
 
 		{#if activeTrips !== null && trains.length === 0 && !loadError}
 			<p class="live-map__empty">
-				Gerade fährt niemand mit eingeschalteter Live-Ansicht – oder alle Fahrten sind noch zu neu
-				für eine Position. Schau später wieder vorbei.
+				{t.empty}
 			</p>
 		{/if}
 	{:else}
-		<p class="live-map__empty">Live-Karte ist ausgeblendet.</p>
+		<p class="live-map__empty">{t.hidden}</p>
 	{/if}
 </div>
 

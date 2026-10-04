@@ -11,9 +11,24 @@
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { FULL_LOSS_COLOR, FULL_LOSS_STROKE, rttColorExpression } from '#lib/map/colors.js';
 	import { tracker } from '#lib/tracker/tracker.svelte.js';
+	import { i18n } from '#lib/i18n.svelte.js';
 
 	const STORAGE_KEY = 'bahn-tracker:mapExpanded';
 	const MINE_DEBOUNCE_MS = 400;
+
+	const de = {
+		map: 'Karte',
+		follow: 'Folgen',
+		previousMeasurements: 'Frühere Messungen',
+		mineLoadError: 'Frühere Messungen konnten nicht geladen werden',
+	};
+	const en: typeof de = {
+		map: 'Map',
+		follow: 'Follow',
+		previousMeasurements: 'Previous measurements',
+		mineLoadError: 'Previous measurements could not be loaded',
+	};
+	const m = $derived(i18n.locale === 'de' ? de : en);
 
 	let expanded = $state(readExpandedStorage());
 	let follow = $state(true);
@@ -106,7 +121,7 @@
 			const source = map?.getSource('mine-cells');
 			if (source && source.type === 'geojson') (source as maplibregl.GeoJSONSource).setData(mineGeoJson(res.cells));
 		} catch (err) {
-			mineLoadError = err instanceof ApiError ? (err.detail ?? err.title) : 'Frühere Messungen konnten nicht geladen werden';
+			mineLoadError = err instanceof ApiError ? (err.detail ?? err.title) : m.mineLoadError;
 		}
 	}
 
@@ -260,7 +275,7 @@
 
 <div class="card track-map">
 	<button class="track-map__toggle" onclick={toggleExpanded} aria-expanded={expanded}>
-		<span>Karte</span>
+		<span>{m.map}</span>
 		<span>{expanded ? '▾' : '▸'}</span>
 	</button>
 
@@ -268,11 +283,11 @@
 		<div class="track-map__controls">
 			<label>
 				<input type="checkbox" bind:checked={follow} style="width: auto; min-height: auto" />
-				Folgen
+				{m.follow}
 			</label>
 			<label>
 				<input type="checkbox" bind:checked={showMine} style="width: auto; min-height: auto" />
-				Frühere Messungen
+				{m.previousMeasurements}
 			</label>
 			<button type="button" class="btn secondary" style="padding: 0.3rem 0.7rem" onclick={toggleFullscreen}>⛶</button>
 		</div>

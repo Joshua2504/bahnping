@@ -243,6 +243,12 @@ p {
 	background: var(--bg-subtle);
 }
 
+.lang-btn {
+	font-size: 0.72rem;
+	font-weight: 750;
+	letter-spacing: 0.04em;
+}
+
 .icon-btn svg {
 	width: 1.05rem;
 	height: 1.05rem;

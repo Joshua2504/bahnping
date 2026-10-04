@@ -16,7 +16,7 @@ const (
 	SpeedtestDurationMs = 8000
 	SpeedtestStreams    = 4
 	SpeedtestMaxBytes   = 50 * 1024 * 1024
-	SpeedtestCooldownMs = 120_000
+	SpeedtestCooldownMs = 30_000
 	BatchMaxSamples     = 500
 	BatchFlushMs        = 30_000
 )

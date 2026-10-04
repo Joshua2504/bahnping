@@ -12,6 +12,11 @@
 				try { t = localStorage.getItem('bahnping-theme'); } catch (e) {}
 				if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 				document.documentElement.dataset.theme = t;
+				// Sprache ebenso früh setzen (siehe #lib/i18n.svelte.ts).
+				var l;
+				try { l = localStorage.getItem('bahnping-lang'); } catch (e) {}
+				if (l !== 'de' && l !== 'en') l = (navigator.language || 'de').toLowerCase().indexOf('de') === 0 ? 'de' : 'en';
+				document.documentElement.lang = l;
 			})();
 		</script>
 		<link rel="manifest" href="/manifest.webmanifest" />

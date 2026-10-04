@@ -17,6 +17,6 @@ Planung: `docs/PLANUNG.md`. API-Vertrag: `docs/API.md`. Geteilte Schemas: `packa
 ## Regeln
 - Niemals IP-Adressen speichern, loggen oder hashen. Keine `req.ip` in Logs. Nur ASN, Netzklasse, IP-Version.
 - Keine externen Requests aus dem Browser (keine CDNs, Fonts, Tiles von Dritten).
-- UI-Texte auf Deutsch. Code-Kommentare auf Deutsch, Bezeichner auf Englisch.
+- UI-Texte zweisprachig (Deutsch Standard, Englisch): je Komponente `de`/`en`-Objekt, Auswahl über `i18n.locale` aus `#lib/i18n.svelte.ts`, geteilte Labels/Formatierung ebenda. Code-Kommentare auf Deutsch, Bezeichner auf Englisch.
 - Ports dieses Projekts: 41xx. Ports 80/443/1025/8025/3000/8080 gehören einem anderen Projekt auf dieser Maschine.
 - Validierung immer über die Zod-Schemas aus `@bahn/shared`, Fehler als RFC 9457 Problem Details.

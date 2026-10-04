@@ -1,5 +1,25 @@
 // Standortverfolgung über watchPosition (siehe PLANUNG.md 6.2). Kein Hintergrundbetrieb in der PWA.
 import { MAX_ACCURACY_M } from '@bahn/shared';
+import { i18n } from '../i18n.svelte.js';
+
+// Nutzersichtbare Fehlertexte, sprachabhängig (siehe `msg()`).
+const de = {
+	noGeolocation: 'Geolocation nicht verfügbar',
+	permissionDenied: 'Standortzugriff verweigert',
+	positionUnavailable: 'Standort nicht verfügbar',
+	timeout: 'Standortabfrage hat zu lange gedauert',
+	unknown: 'Unbekannter Standortfehler',
+};
+const en: typeof de = {
+	noGeolocation: 'Geolocation unavailable',
+	permissionDenied: 'Location access denied',
+	positionUnavailable: 'Location unavailable',
+	timeout: 'Location request timed out',
+	unknown: 'Unknown location error',
+};
+function msg(): typeof de {
+	return i18n.locale === 'de' ? de : en;
+}
 
 export interface GeoState {
 	lat: number | null;
@@ -42,7 +62,7 @@ export class GeoTracker {
 
 	start(): void {
 		if (!('geolocation' in navigator)) {
-			this.state = { ...this.state, error: 'Geolocation nicht verfügbar' };
+			this.state = { ...this.state, error: msg().noGeolocation };
 			this.onUpdate(this.state);
 			return;
 		}
@@ -85,12 +105,12 @@ export class GeoTracker {
 function geoErrorMessage(err: GeolocationPositionError): string {
 	switch (err.code) {
 		case err.PERMISSION_DENIED:
-			return 'Standortzugriff verweigert';
+			return msg().permissionDenied;
 		case err.POSITION_UNAVAILABLE:
-			return 'Standort nicht verfügbar';
+			return msg().positionUnavailable;
 		case err.TIMEOUT:
-			return 'Standortabfrage hat zu lange gedauert';
+			return msg().timeout;
 		default:
-			return 'Unbekannter Standortfehler';
+			return msg().unknown;
 	}
 }

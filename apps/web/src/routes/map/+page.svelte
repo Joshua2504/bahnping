@@ -9,11 +9,9 @@
 	import {
 		METRICS,
 		NET_CLASSES,
-		NET_CLASS_LABELS,
 		PERIODS,
 		Period,
 		TRAIN_TYPES,
-		TRAIN_TYPE_LABELS,
 		type CellRow,
 		type Metric,
 		type NetClass,
@@ -24,14 +22,73 @@
 	type PeriodValue = z.infer<typeof Period>;
 	import { ApiError, api } from '#lib/api.js';
 	import { auth } from '#lib/auth.svelte.js';
+	import { fmtNumber, i18n, netClassLabel, trainTypeLabel } from '#lib/i18n.svelte.js';
 
-	const METRIC_LABELS: Record<Metric, string> = {
-		rtt: 'Latenz (Median)',
-		loss: 'Verlust',
-		avail: 'Verfügbarkeit',
-		down: 'Download',
-		up: 'Upload',
+	const de = {
+		title: 'Karte',
+		metricLabels: {
+			rtt: 'Latenz (Median)',
+			loss: 'Verlust',
+			avail: 'Verfügbarkeit',
+			down: 'Download',
+			up: 'Upload',
+		} as Record<Metric, string>,
+		metric: 'Metrik',
+		net: 'Netz',
+		period: 'Zeitraum',
+		train: 'Zugtyp',
+		all: 'alle',
+		periodAll: 'gesamt',
+		periodDays: (d: string) => `${d} Tage`,
+		mineOnly: 'nur meine Fahrten',
+		loadError: 'Zellen konnten nicht geladen werden',
+		noCells: 'Für diesen Ausschnitt/Filter liegen noch keine Zellen vor.',
+		legend: 'Legende',
+		popup: {
+			trips: (n: number | string) => `${n} Fahrten`,
+			samples: (n: number | string) => `${n} Messungen`,
+			rtt: 'Latenz (Median)',
+			loss: 'Verlust',
+			avail: 'Verfügbarkeit',
+			down: 'Download',
+			up: 'Upload',
+			dash: '–',
+		},
 	};
+	const en: typeof de = {
+		title: 'Map',
+		metricLabels: {
+			rtt: 'Latency (median)',
+			loss: 'Loss',
+			avail: 'Availability',
+			down: 'Download',
+			up: 'Upload',
+		},
+		metric: 'Metric',
+		net: 'Network',
+		period: 'Period',
+		train: 'Train type',
+		all: 'all',
+		periodAll: 'all time',
+		periodDays: (d: string) => `${d} days`,
+		mineOnly: 'my rides only',
+		loadError: 'Cells could not be loaded',
+		noCells: 'No cells available yet for this view/filter.',
+		legend: 'Legend',
+		popup: {
+			trips: (n: number | string) => `${n} trips`,
+			samples: (n: number | string) => `${n} samples`,
+			rtt: 'Latency (median)',
+			loss: 'Loss',
+			avail: 'Availability',
+			down: 'Download',
+			up: 'Upload',
+			dash: '–',
+		},
+	};
+	// Eigener Name "t" statt des üblichen "m", da im Skript bereits lokale Variablen "m" (MapLibre-Instanz)
+	// und Schleifenvariablen "m" (METRICS) existieren.
+	const t = $derived(i18n.locale === 'de' ? de : en);
 
 	const LEGEND: Record<Metric, { color: string; label: string }[]> = {
 		rtt: RTT_LEGEND,
@@ -148,7 +205,7 @@
 			cells = response.cells;
 			loadError = null;
 		} catch (err) {
-			loadError = err instanceof ApiError ? (err.detail ?? err.title) : 'Zellen konnten nicht geladen werden';
+			loadError = err instanceof ApiError ? (err.detail ?? err.title) : t.loadError;
 		} finally {
 			hasLoadedOnce = true;
 		}
@@ -216,12 +273,12 @@
 			if (!f) return;
 			const p = f.properties as Record<string, number | string | null>;
 			const html = `
-				<strong>${p.nTrips ?? 0} Fahrten · ${p.nSamples ?? 0} Messungen</strong><br />
-				Latenz (Median): ${p.rtt ?? '–'} ms<br />
-				Verlust: ${p.loss ?? '–'} %<br />
-				Verfügbarkeit: ${p.avail ?? '–'} %<br />
-				Download: ${p.down ? (Number(p.down) / 1_000_000).toFixed(1) + ' Mbit/s' : '–'}<br />
-				Upload: ${p.up ? (Number(p.up) / 1_000_000).toFixed(1) + ' Mbit/s' : '–'}
+				<strong>${t.popup.trips(p.nTrips ?? 0)} · ${t.popup.samples(p.nSamples ?? 0)}</strong><br />
+				${t.popup.rtt}: ${p.rtt ?? t.popup.dash} ms<br />
+				${t.popup.loss}: ${p.loss ?? t.popup.dash} %<br />
+				${t.popup.avail}: ${p.avail ?? t.popup.dash} %<br />
+				${t.popup.down}: ${p.down ? (Number(p.down) / 1_000_000).toFixed(1) + ' Mbit/s' : t.popup.dash}<br />
+				${t.popup.up}: ${p.up ? (Number(p.up) / 1_000_000).toFixed(1) + ' Mbit/s' : t.popup.dash}
 			`;
 			popup?.remove();
 			popup = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m);
@@ -237,42 +294,42 @@
 </script>
 
 <svelte:head>
-	<title>Karte</title>
+	<title>{t.title}</title>
 </svelte:head>
 
 <div class="card">
 	<div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))">
 		<div class="field">
-			<label for="metric">Metrik</label>
+			<label for="metric">{t.metric}</label>
 			<select id="metric" bind:value={metric}>
-				{#each METRICS as m (m)}
-					<option value={m}>{METRIC_LABELS[m]}</option>
+				{#each METRICS as metricOpt (metricOpt)}
+					<option value={metricOpt}>{t.metricLabels[metricOpt]}</option>
 				{/each}
 			</select>
 		</div>
 		<div class="field">
-			<label for="net">Netz</label>
+			<label for="net">{t.net}</label>
 			<select id="net" bind:value={netFilter}>
-				<option value="all">alle</option>
+				<option value="all">{t.all}</option>
 				{#each NET_CLASSES as n (n)}
-					<option value={n}>{NET_CLASS_LABELS[n]}</option>
+					<option value={n}>{netClassLabel(n)}</option>
 				{/each}
 			</select>
 		</div>
 		<div class="field">
-			<label for="period">Zeitraum</label>
+			<label for="period">{t.period}</label>
 			<select id="period" bind:value={period}>
 				{#each PERIODS as p (p)}
-					<option value={p}>{p === 'all' ? 'gesamt' : p.replace('d', ' Tage')}</option>
+					<option value={p}>{p === 'all' ? t.periodAll : t.periodDays(p.replace('d', ''))}</option>
 				{/each}
 			</select>
 		</div>
 		<div class="field">
-			<label for="train">Zugtyp</label>
+			<label for="train">{t.train}</label>
 			<select id="train" bind:value={trainFilter}>
-				<option value="all">alle</option>
-				{#each TRAIN_TYPES as t (t)}
-					<option value={t}>{TRAIN_TYPE_LABELS[t]}</option>
+				<option value="all">{t.all}</option>
+				{#each TRAIN_TYPES as tt (tt)}
+					<option value={tt}>{trainTypeLabel(tt)}</option>
 				{/each}
 			</select>
 		</div>
@@ -280,7 +337,7 @@
 			<div class="field">
 				<label for="mine">
 					<input id="mine" type="checkbox" bind:checked={mineOnly} style="width: auto; min-height: auto" />
-					nur meine Fahrten
+					{t.mineOnly}
 				</label>
 			</div>
 		{/if}
@@ -290,7 +347,7 @@
 {#if loadError}
 	<div class="notice error">{loadError}</div>
 {:else if hasLoadedOnce && cells.length === 0}
-	<div class="notice warn">Für diesen Ausschnitt/Filter liegen noch keine Zellen vor.</div>
+	<div class="notice warn">{t.noCells}</div>
 {/if}
 
 <div class="card" style="padding: 0; overflow: hidden">
@@ -298,7 +355,7 @@
 </div>
 
 <div class="card">
-	<strong>Legende: {METRIC_LABELS[metric]}</strong>
+	<strong>{t.legend}: {t.metricLabels[metric]}</strong>
 	<div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem">
 		{#each LEGEND[metric] as step (step.label)}
 			<span style="display: inline-flex; align-items: center; gap: 0.4rem">

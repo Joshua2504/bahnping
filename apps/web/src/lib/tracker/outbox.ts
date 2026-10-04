@@ -2,6 +2,13 @@
 import Dexie, { type Table } from 'dexie';
 import { BATCH_FLUSH_MS, BATCH_MAX_SAMPLES, type Sample } from '@bahn/shared';
 import { api, ApiError } from '../api.js';
+import { i18n } from '../i18n.svelte.js';
+
+const de = { needsLogin: 'Bitte erneut anmelden, Upload pausiert.', uploadFailed: 'Upload fehlgeschlagen' };
+const en: typeof de = { needsLogin: 'Please sign in again, upload paused.', uploadFailed: 'Upload failed' };
+function msg(): typeof de {
+	return i18n.locale === 'de' ? de : en;
+}
 
 export interface OutboxEntry {
 	id: string;
@@ -87,11 +94,11 @@ export class Outbox {
 				await this.reportPending();
 			} catch (err) {
 				if (err instanceof ApiError && err.status === 401) {
-					this.status = { ...this.status, needsLogin: true, lastError: 'Bitte erneut anmelden, Upload pausiert.' };
+					this.status = { ...this.status, needsLogin: true, lastError: msg().needsLogin };
 				} else {
 					this.status = {
 						...this.status,
-						lastError: err instanceof ApiError ? err.title : 'Upload fehlgeschlagen',
+						lastError: err instanceof ApiError ? err.title : msg().uploadFailed,
 					};
 				}
 				await this.reportPending();

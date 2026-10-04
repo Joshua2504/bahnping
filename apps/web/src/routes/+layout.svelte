@@ -6,6 +6,7 @@
 	import { page } from '$app/state';
 	import { auth } from '#lib/auth.svelte.js';
 	import { theme } from '#lib/theme.svelte.js';
+	import { i18n } from '#lib/i18n.svelte.js';
 
 	let { children } = $props();
 
@@ -14,16 +15,39 @@
 	});
 
 	$effect(() => theme.apply());
+	$effect(() => i18n.apply());
 
-	const THEME_LABELS = { system: 'Farbmodus: System', light: 'Farbmodus: Hell', dark: 'Farbmodus: Dunkel' } as const;
+	const de = {
+		start: 'Start',
+		track: 'Fahrt',
+		map: 'Karte',
+		stats: 'Statistik',
+		account: 'Konto',
+		admin: 'Admin',
+		login: 'Anmelden',
+		theme: { system: 'Farbmodus: System', light: 'Farbmodus: Hell', dark: 'Farbmodus: Dunkel' },
+		switchLang: 'Switch to English',
+	};
+	const en: typeof de = {
+		start: 'Home',
+		track: 'Ride',
+		map: 'Map',
+		stats: 'Statistics',
+		account: 'Account',
+		admin: 'Admin',
+		login: 'Sign in',
+		theme: { system: 'Colour mode: system', light: 'Colour mode: light', dark: 'Colour mode: dark' },
+		switchLang: 'Auf Deutsch umschalten',
+	};
+	const m = $derived(i18n.locale === 'de' ? de : en);
 
 	const links = $derived([
-		{ href: '/', label: 'Start' },
-		{ href: '/track', label: 'Fahrt' },
-		{ href: '/map', label: 'Karte' },
-		{ href: '/stats', label: 'Statistik' },
-		{ href: '/account', label: 'Konto' },
-		...(auth.me?.role === 'admin' ? [{ href: '/admin', label: 'Admin' }] : []),
+		{ href: '/', label: m.start },
+		{ href: '/track', label: m.track },
+		{ href: '/map', label: m.map },
+		{ href: '/stats', label: m.stats },
+		{ href: '/account', label: m.account },
+		...(auth.me?.role === 'admin' ? [{ href: '/admin', label: m.admin }] : []),
 	]);
 </script>
 
@@ -45,14 +69,12 @@
 			{:else if auth.me}
 				<span class="app-nav__status">{auth.me.displayName ?? auth.me.email}</span>
 			{:else}
-				<a href="/" class="app-nav__status" style="color: var(--accent)">Anmelden</a>
+				<a href="/" class="app-nav__status" style="color: var(--accent)">{m.login}</a>
 			{/if}
-			<button
-				class="icon-btn"
-				onclick={() => theme.cycle()}
-				title={THEME_LABELS[theme.pref]}
-				aria-label={THEME_LABELS[theme.pref]}
-			>
+			<button class="icon-btn lang-btn" onclick={() => i18n.toggle()} title={m.switchLang} aria-label={m.switchLang}>
+				{i18n.locale === 'de' ? 'EN' : 'DE'}
+			</button>
+			<button class="icon-btn" onclick={() => theme.cycle()} title={m.theme[theme.pref]} aria-label={m.theme[theme.pref]}>
 				{#if theme.pref === 'system'}
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
 				{:else if theme.pref === 'light'}

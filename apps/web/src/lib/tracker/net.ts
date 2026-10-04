@@ -2,6 +2,13 @@
 // navigator.connection ist nicht standardisiert (nur Chromium) -> eigenes Interface + Typ-Guards.
 import { WHOAMI_INTERVAL_MS, type NetToken } from '@bahn/shared';
 import { api } from '../api.js';
+import { i18n } from '../i18n.svelte.js';
+
+const de = { whoamiError: 'Fehler bei whoami' };
+const en: typeof de = { whoamiError: 'Network check failed' };
+function msg(): typeof de {
+	return i18n.locale === 'de' ? de : en;
+}
 
 interface NetworkInformationLike extends EventTarget {
 	readonly type?: string;
@@ -77,7 +84,7 @@ export class NetWhoami {
 				error: null,
 			};
 		} catch (err) {
-			this.state = { ...this.state, error: err instanceof Error ? err.message : 'Fehler bei whoami' };
+			this.state = { ...this.state, error: err instanceof Error ? err.message : msg().whoamiError };
 		}
 		this.onUpdate(this.state);
 	}

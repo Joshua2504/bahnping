@@ -10,7 +10,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import uPlot from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { ICE_STATE_LABELS, NET_CLASS_LABELS, TRAIN_TYPE_LABELS } from '@bahn/shared';
+	import { fmtDate, fmtNumber, fmtTime, i18n, iceStateLabel, netClassLabel, trainTypeLabel } from '#lib/i18n.svelte.js';
 	import { ApiError, api, type TripSampleExt, type TripSamplesExt } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { RTT_LEGEND, rttColor, rttColorExpression } from '#lib/map/colors.js';
@@ -44,6 +44,104 @@
 
 	const RTT_COLOR = rttColorExpression('rtt');
 
+	const de = {
+		pageTitle: 'Fahrtdetail',
+		tripSuffix: 'Fahrt',
+		loadFailed: 'Fahrt konnte nicht geladen werden',
+		notFound: 'Fahrt nicht gefunden',
+		toMap: 'Zur Karte',
+		loading: 'Lade Fahrt',
+		flagged: 'markiert',
+		ended: 'beendet',
+		now: 'jetzt',
+		share: 'Teilen',
+		copied: 'Link kopiert',
+		liveValues: 'Live-Werte',
+		speed: 'Tempo',
+		iceStatus: 'ICE-Status',
+		network: 'Netz',
+		lastMeasurement: 'Letzte Messung',
+		keyFigures: 'Kennzahlen',
+		rttMedian: 'RTT Median',
+		rttP90: 'RTT p90',
+		loss: 'Verlust',
+		availability: 'Verfügbarkeit',
+		bestDownload: 'Bester Download',
+		measurements: 'Messwerte',
+		following: 'Folgt',
+		follow: 'Folgen',
+		route: 'Strecke',
+		iceTitle: 'ICE-Portal-Status',
+		iceTimeline: 'Zeitleiste des ICE-Portal-Status',
+		sections: (n: number) => `${n} ${n === 1 ? 'Abschnitt' : 'Abschnitte'}`,
+		showAll: (n: number) => `Alle ${n} Abschnitte anzeigen`,
+		showLess: 'Weniger anzeigen',
+		timeline: 'Zeitverlauf',
+		noPings: 'Keine Ping-Messwerte vorhanden.',
+		networks: 'Gesehene Netze',
+		noNetworks: 'Keine Netzinformationen vorhanden.',
+		speedtests: 'Speedtests',
+		speedtest: 'Speedtest',
+		noSpeedtests: 'Keine Speedtests auf dieser Fahrt.',
+		flaggedSamples: 'Geflaggte Messwerte',
+		ago: (sec: number) =>
+			sec < 60 ? `vor ${sec} s` : sec < 3600 ? `vor ${Math.floor(sec / 60)} min` : `vor ${Math.floor(sec / 3600)} h`,
+		noLatency: 'keine Latenz',
+		popupLoss: 'Verlust',
+		popupSpeed: 'Tempo',
+		popupNet: 'Netz',
+		popupIce: 'ICE',
+	};
+	const en: typeof de = {
+		pageTitle: 'Trip details',
+		tripSuffix: 'trip',
+		loadFailed: 'Could not load trip',
+		notFound: 'Trip not found',
+		toMap: 'Go to map',
+		loading: 'Loading trip',
+		flagged: 'flagged',
+		ended: 'ended',
+		now: 'now',
+		share: 'Share',
+		copied: 'Link copied',
+		liveValues: 'Live values',
+		speed: 'Speed',
+		iceStatus: 'ICE status',
+		network: 'Network',
+		lastMeasurement: 'Last measurement',
+		keyFigures: 'Key figures',
+		rttMedian: 'RTT median',
+		rttP90: 'RTT p90',
+		loss: 'Loss',
+		availability: 'Availability',
+		bestDownload: 'Best download',
+		measurements: 'Measurements',
+		following: 'Following',
+		follow: 'Follow',
+		route: 'Route',
+		iceTitle: 'ICE portal status',
+		iceTimeline: 'Timeline of the ICE portal status',
+		sections: (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`,
+		showAll: (n: number) => `Show all ${n} sections`,
+		showLess: 'Show less',
+		timeline: 'Timeline',
+		noPings: 'No ping measurements.',
+		networks: 'Networks seen',
+		noNetworks: 'No network information.',
+		speedtests: 'Speed tests',
+		speedtest: 'Speed test',
+		noSpeedtests: 'No speed tests on this trip.',
+		flaggedSamples: 'Flagged measurements',
+		ago: (sec: number) =>
+			sec < 60 ? `${sec} s ago` : sec < 3600 ? `${Math.floor(sec / 60)} min ago` : `${Math.floor(sec / 3600)} h ago`,
+		noLatency: 'no latency',
+		popupLoss: 'Loss',
+		popupSpeed: 'Speed',
+		popupNet: 'Network',
+		popupIce: 'ICE',
+	};
+	const m = $derived(i18n.locale === 'de' ? de : en);
+
 	/** Farben je ICE-Portal-Status (gleiche Ampellogik wie RTT). */
 	const ICE_STATE_COLORS: Record<string, string> = {
 		HIGH: '#22c55e',
@@ -59,7 +157,7 @@
 		try {
 			data = await api.getTripSamples(tripId);
 		} catch (err) {
-			loadError = err instanceof ApiError ? (err.detail ?? err.title) : 'Fahrt konnte nicht geladen werden';
+			loadError = err instanceof ApiError ? (err.detail ?? err.title) : m.loadFailed;
 		}
 	}
 
@@ -130,8 +228,8 @@
 	const SHORT_TYPE: Partial<Record<string, string>> = { ice: 'ICE', ic: 'IC', sbahn: 'S' };
 	const trainTitle = $derived.by(() => {
 		if (!data) return '';
-		const prefix = SHORT_TYPE[data.trip.trainType] ?? TRAIN_TYPE_LABELS[data.trip.trainType];
-		return data.trip.trainNumber ? `${prefix} ${data.trip.trainNumber}` : TRAIN_TYPE_LABELS[data.trip.trainType];
+		const prefix = SHORT_TYPE[data.trip.trainType] ?? trainTypeLabel(data.trip.trainType);
+		return data.trip.trainNumber ? `${prefix} ${data.trip.trainNumber}` : trainTypeLabel(data.trip.trainType);
 	});
 
 	const lastSample = $derived.by(() => {
@@ -157,20 +255,14 @@
 	);
 
 	function fmt(value: number | null, digits = 0): string {
-		return value === null ? '–' : value.toFixed(digits);
+		return value === null ? '–' : fmtNumber(value, digits);
 	}
 
 	function mbit(bps: number | null): string {
-		return bps === null ? '–' : (bps / 1_000_000).toFixed(1);
+		return bps === null ? '–' : fmtNumber(bps / 1_000_000, 1);
 	}
 
-	function timeLabel(iso: string | number, seconds = false): string {
-		return new Date(iso).toLocaleTimeString('de-DE', {
-			hour: '2-digit',
-			minute: '2-digit',
-			...(seconds ? { second: '2-digit' } : {}),
-		});
-	}
+	const timeLabel = fmtTime;
 
 	/** Dauer in ms → "45 s", "12 min", "1 h 05 min". */
 	function durationMs(ms: number): string {
@@ -179,12 +271,6 @@
 		const min = Math.round(sec / 60);
 		if (min < 60) return `${min} min`;
 		return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
-	}
-
-	function agoLabel(sec: number): string {
-		if (sec < 60) return `vor ${sec} s`;
-		if (sec < 3600) return `vor ${Math.floor(sec / 60)} min`;
-		return `vor ${Math.floor(sec / 3600)} h`;
 	}
 
 	const tripEndMs = $derived.by(() => {
@@ -238,7 +324,7 @@
 		const out: IceSegment[] = [];
 		for (const s of data?.samples ?? []) {
 			if (!s.iceState) continue;
-			const label = ICE_STATE_LABELS[s.iceState] ?? s.iceState;
+			const label = iceStateLabel(s.iceState);
 			const at = new Date(s.ts).getTime();
 			const prev = out[out.length - 1];
 			if (prev && prev.label === label) continue;
@@ -406,17 +492,19 @@
 			const f = e.features?.[0];
 			if (!f) return;
 			const p = f.properties as Record<string, unknown>;
+			// `m` ist hier die Karte; Texte daher über `txt`.
+			const txt = i18n.locale === 'de' ? de : en;
 			const rtt = p.rtt === null || p.rtt === undefined || p.rtt === 'null' ? null : Number(p.rtt);
-			const ice = typeof p.iceState === 'string' && p.iceState !== 'null' ? ICE_STATE_LABELS[p.iceState] ?? p.iceState : null;
+			const ice = typeof p.iceState === 'string' && p.iceState !== 'null' ? iceStateLabel(p.iceState) : null;
 			const html = `
 				<div class="trip-popup">
 					<div class="trip-popup__time">${timeLabel(p.ts as string, true)}</div>
-					<div class="trip-popup__rtt"><span style="background:${rttColor(rtt)}"></span>${rtt !== null ? `${rtt.toFixed(0)} ms` : 'keine Latenz'}${rtt !== null && p.latencyKind === 'HTTP' ? ' <em>HTTP</em>' : ''}</div>
+					<div class="trip-popup__rtt"><span style="background:${rttColor(rtt)}"></span>${rtt !== null ? `${fmtNumber(rtt)} ms` : txt.noLatency}${rtt !== null && p.latencyKind === 'HTTP' ? ' <em>HTTP</em>' : ''}</div>
 					<dl>
-						<dt>Verlust</dt><dd>${p.loss !== null && p.loss !== undefined && p.loss !== 'null' ? Number(p.loss).toFixed(0) : '–'} %</dd>
-						<dt>Tempo</dt><dd>${p.speedKmh !== null && p.speedKmh !== undefined && p.speedKmh !== 'null' ? Number(p.speedKmh).toFixed(0) : '–'} km/h</dd>
-						<dt>Netz</dt><dd>${NET_CLASS_LABELS[p.netClass as keyof typeof NET_CLASS_LABELS] ?? p.netClass}${p.asn && p.asn !== 'null' ? ` · AS${p.asn}` : ''}</dd>
-						${ice ? `<dt>ICE</dt><dd>${ice}</dd>` : ''}
+						<dt>${txt.popupLoss}</dt><dd>${p.loss !== null && p.loss !== undefined && p.loss !== 'null' ? fmtNumber(Number(p.loss)) : '–'} %</dd>
+						<dt>${txt.popupSpeed}</dt><dd>${p.speedKmh !== null && p.speedKmh !== undefined && p.speedKmh !== 'null' ? fmtNumber(Number(p.speedKmh)) : '–'} km/h</dd>
+						<dt>${txt.popupNet}</dt><dd>${netClassLabel(p.netClass as string)}${p.asn && p.asn !== 'null' ? ` · AS${p.asn}` : ''}</dd>
+						${ice ? `<dt>${txt.popupIce}</dt><dd>${ice}</dd>` : ''}
 					</dl>
 				</div>
 			`;
@@ -462,7 +550,7 @@
 
 		const axisStroke = cssVar('--fg-dim');
 		const gridStroke = cssVar('--border');
-		const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })} s` : `${v} ms`);
+		const fmtMs = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString(i18n.intl, { maximumFractionDigits: 1 })} s` : `${v} ms`);
 		const axisBase = {
 			stroke: axisStroke,
 			grid: { stroke: gridStroke, width: 1 },
@@ -568,6 +656,7 @@
 	$effect(() => {
 		void chartWidth;
 		void theme.resolved;
+		void i18n.locale;
 		void pingSamples.length;
 		if (data && chartContainer && pingSamples.length > 0) setupChart();
 	});
@@ -581,7 +670,7 @@
 </script>
 
 <svelte:head>
-	<title>{data ? `${trainTitle} – Fahrt` : 'Fahrtdetail'} · BahnPing</title>
+	<title>{data ? `${trainTitle} – ${m.tripSuffix}` : m.pageTitle} · BahnPing</title>
 </svelte:head>
 
 {#if loadError && !data}
@@ -589,12 +678,12 @@
 		<div class="empty__icon" aria-hidden="true">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15V7a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3zM4 11h16M8 21l1.5-3M16 21l-1.5-3" /><circle cx="8.5" cy="14.5" r="1" /><circle cx="15.5" cy="14.5" r="1" /></svg>
 		</div>
-		<h1>Fahrt nicht gefunden</h1>
+		<h1>{m.notFound}</h1>
 		<p>{loadError}</p>
-		<a class="btn secondary" href="/map">Zur Karte</a>
+		<a class="btn secondary" href="/map">{m.toMap}</a>
 	</div>
 {:else if !data}
-	<div class="skeleton" aria-busy="true" aria-label="Lade Fahrt">
+	<div class="skeleton" aria-busy="true" aria-label={m.loading}>
 		<div class="skeleton__line" style="width: 40%; height: 2rem"></div>
 		<div class="skeleton__line" style="width: 65%"></div>
 		<div class="skeleton__grid">
@@ -606,23 +695,23 @@
 	<header class="hero">
 		<div class="hero__main">
 			<div class="hero__eyebrow">
-				<span class="chip chip--type">{TRAIN_TYPE_LABELS[data.trip.trainType]}</span>
+				<span class="chip chip--type">{trainTypeLabel(data.trip.trainType)}</span>
 				{#if isLive}
 					<span class="live-badge" style="margin-left: 0">LIVE</span>
 				{:else if data.trip.status === 'flagged'}
-					<span class="chip chip--warn">markiert</span>
+					<span class="chip chip--warn">{m.flagged}</span>
 				{:else}
-					<span class="chip">beendet</span>
+					<span class="chip">{m.ended}</span>
 				{/if}
 			</div>
 			<h1 class="hero__title">
 				{trainTitle}
 			</h1>
 			<p class="hero__meta">
-				<span>{new Date(data.trip.startedAt).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}</span>
+				<span>{fmtDate(data.trip.startedAt, { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}</span>
 				<span class="dot" aria-hidden="true"></span>
 				<span>
-					{timeLabel(data.trip.startedAt)}–{data.trip.endedAt ? timeLabel(data.trip.endedAt) : isLive ? 'jetzt' : lastSample ? timeLabel(lastSample.ts) : '…'}
+					{timeLabel(data.trip.startedAt)}–{data.trip.endedAt ? timeLabel(data.trip.endedAt) : isLive ? m.now : lastSample ? timeLabel(lastSample.ts) : '…'}
 				</span>
 				<span class="dot" aria-hidden="true"></span>
 				<span>{durationMs(tripDurationMs)}</span>
@@ -632,7 +721,7 @@
 		</div>
 		<button class="btn secondary hero__share" onclick={share}>
 			<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13" /></svg>
-			{shareState === 'copied' ? 'Link kopiert' : 'Teilen'}
+			{shareState === 'copied' ? m.copied : m.share}
 		</button>
 	</header>
 
@@ -641,74 +730,74 @@
 	{/if}
 
 	{#if isLive}
-		<section class="live-strip" aria-label="Live-Werte">
+		<section class="live-strip" aria-label={m.liveValues}>
 			<div class="live-tile">
-				<span class="live-tile__label">Tempo</span>
-				<span class="live-tile__value">{currentSpeedKmh !== null ? currentSpeedKmh.toFixed(0) : '–'}<small>km/h</small></span>
+				<span class="live-tile__label">{m.speed}</span>
+				<span class="live-tile__value">{currentSpeedKmh !== null ? fmtNumber(currentSpeedKmh) : '–'}<small>km/h</small></span>
 			</div>
 			<div class="live-tile">
-				<span class="live-tile__label">ICE-Status</span>
+				<span class="live-tile__label">{m.iceStatus}</span>
 				<span class="live-tile__value live-tile__value--text">
 					{#if currentIceState}
 						<span class="state-dot" style="background: {ICE_STATE_COLORS[currentIceState] ?? '#64748b'}"></span>
-						{ICE_STATE_LABELS[currentIceState] ?? currentIceState}
+						{iceStateLabel(currentIceState)}
 					{:else}–{/if}
 				</span>
 			</div>
 			<div class="live-tile">
-				<span class="live-tile__label">Netz</span>
-				<span class="live-tile__value live-tile__value--text">{lastSample ? NET_CLASS_LABELS[lastSample.netClass] : '–'}</span>
+				<span class="live-tile__label">{m.network}</span>
+				<span class="live-tile__value live-tile__value--text">{lastSample ? netClassLabel(lastSample.netClass) : '–'}</span>
 			</div>
 			<div class="live-tile">
-				<span class="live-tile__label">Letzte Messung</span>
+				<span class="live-tile__label">{m.lastMeasurement}</span>
 				<span class="live-tile__value live-tile__value--text" class:stale={lastSeenSecLive !== null && lastSeenSecLive > 60}>
-					{lastSeenSecLive !== null ? agoLabel(lastSeenSecLive) : '–'}
+					{lastSeenSecLive !== null ? m.ago(lastSeenSecLive) : '–'}
 				</span>
 			</div>
 		</section>
 	{/if}
 
-	<section class="kpis" aria-label="Kennzahlen">
+	<section class="kpis" aria-label={m.keyFigures}>
 		<div class="kpi">
-			<span class="kpi__label">RTT Median</span>
+			<span class="kpi__label">{m.rttMedian}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: {rttColor(rttMedianOverall)}"></span>
 				{fmt(rttMedianOverall)}<small>ms</small>
 			</span>
 		</div>
 		<div class="kpi">
-			<span class="kpi__label">RTT p90</span>
+			<span class="kpi__label">{m.rttP90}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: {rttColor(rttP90Overall)}"></span>
 				{fmt(rttP90Overall)}<small>ms</small>
 			</span>
 		</div>
 		<div class="kpi">
-			<span class="kpi__label">Verlust</span>
+			<span class="kpi__label">{m.loss}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: {lossColor(lossPct)}"></span>
 				{fmt(lossPct, lossPct !== null && lossPct < 10 ? 1 : 0)}<small>%</small>
 			</span>
 		</div>
 		<div class="kpi">
-			<span class="kpi__label">Verfügbarkeit</span>
+			<span class="kpi__label">{m.availability}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: {availColor(availPct)}"></span>
 				{fmt(availPct)}<small>%</small>
 			</span>
 		</div>
 		<div class="kpi">
-			<span class="kpi__label">Bester Download</span>
+			<span class="kpi__label">{m.bestDownload}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: var(--info)"></span>
 				{mbit(bestDown)}<small>Mbit/s</small>
 			</span>
 		</div>
 		<div class="kpi">
-			<span class="kpi__label">Messwerte</span>
+			<span class="kpi__label">{m.measurements}</span>
 			<span class="kpi__value">
 				<span class="kpi__bar" style="background: var(--fg-faint)"></span>
-				{data.samples.length.toLocaleString('de-DE')}
+				{fmtNumber(data.samples.length)}
 			</span>
 		</div>
 	</section>
@@ -719,12 +808,12 @@
 			{#if isLive}
 				<button class="map-chip" class:on={follow} onclick={() => (follow ? (follow = false) : recenter())} aria-pressed={follow}>
 					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
-					{follow ? 'Folgt' : 'Folgen'}
+					{follow ? m.following : m.follow}
 				</button>
 			{:else}
 				<button class="map-chip" onclick={recenter}>
 					<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" /></svg>
-					Strecke
+					{m.route}
 				</button>
 			{/if}
 		</div>
@@ -733,7 +822,7 @@
 				{#each RTT_LEGEND as l (l.label)}
 					<span class="legend__item"><span class="legend__swatch" style="background: {l.color}"></span>{l.label}</span>
 				{/each}
-				<span class="legend__item"><span class="legend__swatch legend__swatch--ring" style="background: #38bdf8"></span>Speedtest</span>
+				<span class="legend__item"><span class="legend__swatch legend__swatch--ring" style="background: #38bdf8"></span>{m.speedtest}</span>
 			</div>
 		</div>
 	</section>
@@ -741,11 +830,11 @@
 	{#if iceSegments.length > 0 && iceRange}
 		<section class="card section">
 			<div class="section__head">
-				<h2>ICE-Portal-Status</h2>
-				<span class="section__hint">{iceSegments.length} {iceSegments.length === 1 ? 'Abschnitt' : 'Abschnitte'}</span>
+				<h2>{m.iceTitle}</h2>
+				<span class="section__hint">{m.sections(iceSegments.length)}</span>
 			</div>
 
-			<div class="ice-bar" role="img" aria-label="Zeitleiste des ICE-Portal-Status">
+			<div class="ice-bar" role="img" aria-label={m.iceTimeline}>
 				{#each iceSegments as seg (seg.from)}
 					<span
 						class="ice-bar__seg"
@@ -756,7 +845,7 @@
 			</div>
 			<div class="ice-bar__axis">
 				<span>{timeLabel(iceRange.from)}</span>
-				<span>{isLive ? 'jetzt' : timeLabel(iceRange.to)}</span>
+				<span>{isLive ? m.now : timeLabel(iceRange.to)}</span>
 			</div>
 
 			<div class="ice-totals">
@@ -782,7 +871,7 @@
 			</ol>
 			{#if iceSegments.length > ICE_LIST_COLLAPSED}
 				<button class="link-btn" onclick={() => (iceListOpen = !iceListOpen)}>
-					{iceListOpen ? 'Weniger anzeigen' : `Alle ${iceSegments.length} Abschnitte anzeigen`}
+					{iceListOpen ? m.showLess : m.showAll(iceSegments.length)}
 				</button>
 			{/if}
 		</section>
@@ -790,16 +879,16 @@
 
 	<section class="card section">
 		<div class="section__head">
-			<h2>Zeitverlauf</h2>
+			<h2>{m.timeline}</h2>
 		</div>
 		{#if pingSamples.length === 0}
-			<p class="muted">Keine Ping-Messwerte vorhanden.</p>
+			<p class="muted">{m.noPings}</p>
 		{:else}
 			<div class="chart-legend">
-				<span><i style="background: #4ade80"></i>RTT Median</span>
+				<span><i style="background: #4ade80"></i>{m.rttMedian}</span>
 				<span><i class="dashed" style="border-color: #fbbf24"></i>RTT p90</span>
-				<span><i style="background: #f87171"></i>Verlust</span>
-				<span><i style="background: #38bdf8"></i>Tempo</span>
+				<span><i style="background: #f87171"></i>{m.loss}</span>
+				<span><i style="background: #38bdf8"></i>{m.speed}</span>
 			</div>
 			<div bind:this={chartContainer} class="chart"></div>
 		{/if}
@@ -808,10 +897,10 @@
 	<div class="two-col">
 		<section class="card section">
 			<div class="section__head">
-				<h2>Gesehene Netze</h2>
+				<h2>{m.networks}</h2>
 			</div>
 			{#if data.asns.length === 0}
-				<p class="muted">Keine Netzinformationen vorhanden.</p>
+				<p class="muted">{m.noNetworks}</p>
 			{:else}
 				<ul class="nets">
 					{#each data.asns as a (a.asn)}
@@ -819,10 +908,10 @@
 						<li class="net">
 							<div class="net__row">
 								<span class="net__name">{a.name}</span>
-								<span class="net__pct">{pct.toFixed(0)} %</span>
+								<span class="net__pct">{fmtNumber(pct)} %</span>
 							</div>
 							<div class="net__meter"><span style="width: {pct}%"></span></div>
-							<div class="net__meta">AS{a.asn} · {NET_CLASS_LABELS[a.netClass]}</div>
+							<div class="net__meta">AS{a.asn} · {netClassLabel(a.netClass)}</div>
 						</li>
 					{/each}
 				</ul>
@@ -831,11 +920,11 @@
 
 		<section class="card section">
 			<div class="section__head">
-				<h2>Speedtests</h2>
+				<h2>{m.speedtests}</h2>
 				{#if speedtestSamples.length > 0}<span class="section__hint">{speedtestSamples.length}</span>{/if}
 			</div>
 			{#if speedtestSamples.length === 0}
-				<p class="muted">Keine Speedtests auf dieser Fahrt.</p>
+				<p class="muted">{m.noSpeedtests}</p>
 			{:else}
 				<ul class="speedtests">
 					{#each speedtestSamples as s (s.id)}
@@ -852,7 +941,7 @@
 
 	{#if flaggedSamples.length > 0}
 		<details class="card section flagged">
-			<summary>Geflaggte Messwerte <span class="section__hint">{flaggedSamples.length}</span></summary>
+			<summary>{m.flaggedSamples} <span class="section__hint">{flaggedSamples.length}</span></summary>
 			<ul class="flagged__list">
 				{#each flaggedSamples as s (s.id)}
 					<li>
