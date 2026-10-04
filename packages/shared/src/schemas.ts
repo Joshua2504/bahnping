@@ -212,6 +212,62 @@ export const AdminAsn = z.object({
 });
 export type AdminAsn = z.infer<typeof AdminAsn>;
 
+// ---------- Admin: SMTP-Einstellungen ----------
+
+export const SMTP_SECURITY = ['none', 'starttls', 'tls'] as const;
+export const SmtpSecurity = z.enum(SMTP_SECURITY);
+export type SmtpSecurity = z.infer<typeof SmtpSecurity>;
+
+const hostnameOrIp = z
+  .string()
+  .trim()
+  .min(1)
+  .max(253)
+  .regex(/^[a-zA-Z0-9.:_-]+$/, 'Ungültiger Hostname/IP');
+
+/** "Name <mail@domain>" oder reine Adresse. */
+const fromAddress = z
+  .string()
+  .trim()
+  .min(3)
+  .max(200)
+  .refine((v) => {
+    const m = /^(.*)<([^<>]+)>$/.exec(v);
+    const addr = m ? m[2].trim() : v;
+    return z.email().safeParse(addr).success;
+  }, 'Ungültiger Absender, erwartet "mail@domain" oder "Name <mail@domain>"');
+
+export const SmtpSettings = z.object({
+  mode: z.enum(['env', 'custom']),
+  host: z.string(),
+  port: z.number().int().min(1).max(65535),
+  security: SmtpSecurity,
+  user: z.string(),
+  from: z.string(),
+  rejectUnauthorized: z.boolean(),
+  passwordSet: z.boolean(),
+  envDefaults: z.object({ host: z.string(), port: z.number().int(), from: z.string() }),
+});
+export type SmtpSettings = z.infer<typeof SmtpSettings>;
+
+export const SmtpSettingsUpdate = z.object({
+  mode: z.enum(['env', 'custom']),
+  host: hostnameOrIp,
+  port: z.number().int().min(1).max(65535),
+  security: SmtpSecurity,
+  user: z.string().trim().max(200),
+  /** fehlt = bestehendes Passwort beibehalten, "" = Passwort löschen */
+  password: z.string().max(500).optional(),
+  from: fromAddress,
+  rejectUnauthorized: z.boolean(),
+});
+export type SmtpSettingsUpdate = z.infer<typeof SmtpSettingsUpdate>;
+
+export const SmtpTestRequest = z.object({ to: z.email().max(254).optional() });
+export type SmtpTestRequest = z.infer<typeof SmtpTestRequest>;
+export const SmtpTestResponse = z.object({ ok: z.literal(true), messageId: z.string() });
+export type SmtpTestResponse = z.infer<typeof SmtpTestResponse>;
+
 export const AdminAsnUpdate = z.object({ netClass: NetClass });
 export type AdminAsnUpdate = z.infer<typeof AdminAsnUpdate>;
 export const AdminAsnUpdateResponse = z.object({ asn: AdminAsn, samplesUpdated: z.number().int() });

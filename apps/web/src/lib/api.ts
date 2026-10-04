@@ -14,12 +14,16 @@ import {
 	PublicStats,
 	Sample,
 	SampleBatchResponse,
+	SmtpSettings,
+	SmtpTestResponse,
 	Trip,
 	TripEnd,
 	TripSamples,
 	WhoamiResponse,
 	type AdminAsnUpdate,
 	type CellsQuery,
+	type SmtpSettingsUpdate,
+	type SmtpTestRequest,
 	type TripCreate,
 } from '@bahn/shared';
 
@@ -124,4 +128,8 @@ export const api = {
 		request(`/api/admin/asns?filter=${filter}`, {}, z.array(AdminAsn)),
 	adminUpdateAsn: (asn: number, body: AdminAsnUpdate) =>
 		request(`/api/admin/asns/${asn}`, withBody('PATCH', body), AdminAsnUpdateResponse),
+
+	adminGetSmtp: () => request('/api/admin/smtp', {}, SmtpSettings),
+	adminUpdateSmtp: (body: SmtpSettingsUpdate) => request('/api/admin/smtp', withBody('PUT', body), SmtpSettings),
+	adminTestSmtp: (body: SmtpTestRequest) => request('/api/admin/smtp/test', withBody('POST', body), SmtpTestResponse),
 };

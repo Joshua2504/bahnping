@@ -3,6 +3,7 @@ import {
   doublePrecision,
   index,
   integer,
+  jsonb,
   pgTable,
   smallint,
   text,
@@ -140,6 +141,17 @@ export const samples = pgTable(
     index('samples_user_idx').on(t.userId),
   ],
 );
+
+/**
+ * Allgemeine Admin-Einstellungen als Key/Value mit JSON-Wert, z.B. SMTP-Zugangsdaten (Key "smtp").
+ * Geheimnisse (z.B. Passwörter) liegen im `value`-JSON verschlüsselt, nie im Klartext.
+ */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
 
 export const asnCatalog = pgTable('asn_catalog', {
   asn: integer('asn').primaryKey(),

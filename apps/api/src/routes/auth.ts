@@ -27,7 +27,7 @@ function toMe(row: typeof users.$inferSelect): Me {
 }
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  const { cfg, db, mailer } = app.ctx;
+  const { cfg, db, mail } = app.ctx;
 
   app.post('/api/auth/magic-link', async (request, reply) => {
     const body = parseOrProblem(MagicLinkRequest, request.body, reply);
@@ -51,7 +51,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
       });
       const confirmUrl = `${cfg.PUBLIC_URL}/auth/confirm?token=${token}`;
-      await sendMagicLinkMail(mailer, cfg.MAIL_FROM, body.email, confirmUrl);
+      await sendMagicLinkMail(mail, body.email, confirmUrl);
     } catch (err) {
       request.log.warn({ err: String(err) }, 'Magic-Link-Versand fehlgeschlagen');
     }

@@ -1,8 +1,8 @@
 import type postgres from 'postgres';
-import type { Transporter } from 'nodemailer';
 import type { Config } from './config.js';
 import type { Db } from './db/client.js';
 import { AsnService } from './lib/asn.js';
+import type { MailService } from './lib/mail.js';
 
 /** 4 MiB Zufallsdaten für den Download-Speedtest, einmal beim Start erzeugt. */
 export const SPEEDTEST_BUFFER_SIZE = 4 * 1024 * 1024;
@@ -11,7 +11,7 @@ export interface AppContext {
   cfg: Config;
   db: Db;
   dbClient: postgres.Sql;
-  mailer: Transporter;
+  mail: MailService;
   asn: AsnService;
   speedBuffer: Buffer;
 }

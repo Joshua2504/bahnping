@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { loadConfig } from './config.js';
 import { createDb } from './db/client.js';
-import { createMailer } from './lib/mail.js';
+import { MailService } from './lib/mail.js';
 import { AsnService } from './lib/asn.js';
 import { buildApp } from './app.js';
 import { SPEEDTEST_BUFFER_SIZE, type AppContext } from './context.js';
@@ -20,10 +20,11 @@ async function main(): Promise<void> {
   const asn = new AsnService();
   await asn.seedClassMap(db, cfg.NETCLASS_OVERRIDES);
 
-  const mailer = createMailer(cfg);
+  const mail = new MailService(cfg, db);
+  await mail.reload();
   const speedBuffer = randomBytes(SPEEDTEST_BUFFER_SIZE);
 
-  const ctx: AppContext = { cfg, db, dbClient: client, mailer, asn, speedBuffer };
+  const ctx: AppContext = { cfg, db, dbClient: client, mail, asn, speedBuffer };
   const app = await buildApp(ctx);
 
   const cachePath = path.resolve(apiRoot, cfg.IPTOASN_CACHE);

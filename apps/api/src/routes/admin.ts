@@ -1,9 +1,57 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { AdminAsnUpdate, type AdminAsn } from '@bahn/shared';
-import { asnCatalog, samples } from '../db/schema.js';
+import { AdminAsnUpdate, SmtpSettingsUpdate, SmtpTestRequest, type AdminAsn, type SmtpSettings } from '@bahn/shared';
+import { asnCatalog, samples, users } from '../db/schema.js';
+import { loadSmtpSettings, saveSmtpSettings, type StoredSmtpSettings } from '../lib/smtpSettings.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
+
+const TEST_MAIL_WINDOW_MS = 10 * 60_000;
+const TEST_MAIL_MAX = 5;
+/** userId -> Zeitstempel der letzten Testmail-Versuche, nur im RAM. */
+const testMailLog = new Map<string, number[]>();
+
+function allowTestMail(userId: string): boolean {
+  const now = Date.now();
+  const recent = (testMailLog.get(userId) ?? []).filter((t) => now - t < TEST_MAIL_WINDOW_MS);
+  if (recent.length >= TEST_MAIL_MAX) {
+    testMailLog.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  testMailLog.set(userId, recent);
+  return true;
+}
+
+function toSmtpSettings(stored: StoredSmtpSettings | null, envDefaults: { host: string; port: number; from: string }): SmtpSettings {
+  return {
+    mode: stored?.mode ?? 'env',
+    host: stored?.host ?? envDefaults.host,
+    port: stored?.port ?? envDefaults.port,
+    security: stored?.security ?? 'none',
+    user: stored?.user ?? '',
+    from: stored?.from ?? envDefaults.from,
+    rejectUnauthorized: stored?.rejectUnauthorized ?? true,
+    passwordSet: Boolean(stored?.passwordEnc),
+    envDefaults,
+  };
+}
+
+/** Leitet aus einem SMTP-/Nodemailer-Fehler eine verständliche, nicht geheimnisverratende Meldung ab. */
+function describeSmtpError(err: unknown): string {
+  const code = (err as { code?: string; responseCode?: number } | undefined)?.code;
+  const responseCode = (err as { responseCode?: number } | undefined)?.responseCode;
+  if (code === 'EAUTH' || responseCode === 535) return 'Authentifizierung fehlgeschlagen (Benutzer/Passwort prüfen).';
+  if (code === 'ECONNREFUSED') return 'Verbindung abgelehnt (Host/Port prüfen).';
+  if (code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'ECONNECTION') return 'Zeitüberschreitung bei der Verbindung zum SMTP-Server.';
+  if (code === 'CERT_HAS_EXPIRED' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT') {
+    return 'Zertifikat des SMTP-Servers ungültig.';
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  if (/certificate/i.test(message)) return 'Zertifikat des SMTP-Servers ungültig.';
+  if (/timed? ?out/i.test(message)) return 'Zeitüberschreitung bei der Verbindung zum SMTP-Server.';
+  return 'Verbindung zum SMTP-Server fehlgeschlagen.';
+}
 
 function toAdminAsn(row: {
   asn: number;
@@ -102,5 +150,57 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       }),
       samplesUpdated: changed.length,
     });
+  });
+
+  app.get('/api/admin/smtp', { preHandler: app.requireAdmin }, async (_request, reply) => {
+    const stored = await loadSmtpSettings(db);
+    const envDefaults = { host: app.ctx.cfg.SMTP_HOST, port: app.ctx.cfg.SMTP_PORT, from: app.ctx.cfg.MAIL_FROM };
+    reply.send(toSmtpSettings(stored, envDefaults));
+  });
+
+  app.put('/api/admin/smtp', { preHandler: app.requireAdmin }, async (request, reply) => {
+    const body = parseOrProblem(SmtpSettingsUpdate, request.body, reply);
+    if (!body) return;
+
+    const stored = await saveSmtpSettings(db, app.ctx.cfg.APP_SECRET, body, request.userId!);
+    await app.ctx.mail.reload();
+
+    const envDefaults = { host: app.ctx.cfg.SMTP_HOST, port: app.ctx.cfg.SMTP_PORT, from: app.ctx.cfg.MAIL_FROM };
+    reply.send(toSmtpSettings(stored, envDefaults));
+  });
+
+  app.post('/api/admin/smtp/test', { preHandler: app.requireAdmin }, async (request, reply) => {
+    const body = parseOrProblem(SmtpTestRequest, request.body ?? {}, reply);
+    if (!body) return;
+
+    if (!allowTestMail(request.userId!)) {
+      sendProblem(reply, 429, 'Zu viele Testmails', { detail: 'Höchstens 5 Testmails je 10 Minuten.' });
+      return;
+    }
+
+    let to = body.to;
+    if (!to) {
+      const rows = await db.select({ email: users.email }).from(users).where(eq(users.id, request.userId!)).limit(1);
+      to = rows[0]?.email;
+    }
+    if (!to) {
+      sendProblem(reply, 400, 'Keine Empfängeradresse bekannt');
+      return;
+    }
+
+    const { mail } = app.ctx;
+    try {
+      await mail.getTransporter().verify();
+      const { messageId } = await mail.send({
+        to,
+        subject: 'Testmail – Bahn-Netzwerk-Tracker',
+        text: 'Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des Bahn-Netzwerk-Trackers.\n\nWenn du diese Mail erhalten hast, funktioniert der Mailversand.',
+        html: '<p>Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des Bahn-Netzwerk-Trackers.</p><p>Wenn du diese Mail erhalten hast, funktioniert der Mailversand.</p>',
+      });
+      reply.send({ ok: true, messageId });
+    } catch (err) {
+      request.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'SMTP-Testmail fehlgeschlagen');
+      sendProblem(reply, 502, 'Testmail konnte nicht gesendet werden', { detail: describeSmtpError(err) });
+    }
   });
 }

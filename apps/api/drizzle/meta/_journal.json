@@ -8,6 +8,13 @@
       "when": 1791045179679,
       "tag": "0000_loose_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791106129378,
+      "tag": "0001_wandering_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

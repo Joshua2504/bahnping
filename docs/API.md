@@ -51,6 +51,24 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
   (`{ asn: AdminAsn, samplesUpdated }`). Setzt `source='admin'`, `reviewedAt=now()`, aktualisiert die
   In-Memory-Klasse im `AsnService` sofort und schreibt `net_class` auf alle bestehenden `samples`
   dieser ASN zurück, **außer** solche mit Flag `net_sig_invalid`.
+- `GET /api/admin/smtp` → `200 SmtpSettings` (`{ mode, host, port, security, user, from,
+  rejectUnauthorized, passwordSet, envDefaults: { host, port, from } }`). Das Passwort wird nie
+  zurückgegeben, nur `passwordSet`.
+- `PUT /api/admin/smtp` Body `SmtpSettingsUpdate` (`{ mode, host, port, security, user, password?,
+  from, rejectUnauthorized }`) → `200 SmtpSettings`. `password` fehlt → bestehendes Passwort bleibt
+  erhalten; `password: ""` → Passwort wird gelöscht. Speichert in `app_settings` (Key `smtp`,
+  Passwort AES-256-GCM-verschlüsselt mit einem von `APP_SECRET` abgeleiteten Schlüssel, Zweck
+  `smtp-password`) und baut den Mail-Transport sofort neu auf (`MailService.reload()`). Bei
+  `mode='env'` werden die ENV-Variablen `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_FROM`
+  genutzt (Testversion: Mailpit), bei `mode='custom'` die gespeicherte Konfiguration. `security`:
+  `'tls'` → `secure:true`, `'starttls'` → `secure:false, requireTLS:true`, `'none'` →
+  `secure:false, ignoreTLS:true`; dazu `tls.rejectUnauthorized`. Timeouts: connection/greeting 10 s,
+  socket 20 s.
+- `POST /api/admin/smtp/test` Body `SmtpTestRequest` (`{ to? }`, Standard: E-Mail des aufrufenden
+  Admins) → `200 SmtpTestResponse` (`{ ok: true, messageId }`) oder `502` mit verständlicher
+  Fehlermeldung (Auth fehlgeschlagen, Verbindung abgelehnt, Zeitüberschreitung, Zertifikat
+  ungültig), abgeleitet aus `err.code`/`responseCode`, ohne Interna zu verraten. Limit 5 Testmails
+  je Admin pro 10 Minuten (im RAM).
 
 ## Netz
 - `GET /api/net/whoami` → `200 WhoamiResponse`. Client-IP aus Socket bzw. `X-Forwarded-For` (nur wenn
