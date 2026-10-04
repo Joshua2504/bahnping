@@ -12,6 +12,7 @@
 	import 'uplot/dist/uPlot.min.css';
 	import { fmtDate, fmtNumber, fmtTime, i18n, iceStateLabel, netClassLabel, trainTypeLabel } from '#lib/i18n.svelte.js';
 	import { ApiError, api, type TripSampleExt, type TripSamplesExt } from '#lib/api.js';
+	import type { TripStop } from '@bahn/shared';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { RTT_LEGEND, rttColor, rttColorExpression } from '#lib/map/colors.js';
 	import { median, percentile } from '#lib/tracker/util.js';
@@ -91,6 +92,15 @@
 		popupSpeed: 'Tempo',
 		popupNet: 'Netz',
 		popupIce: 'ICE',
+		unitChip: (v: string) => `Tz ${v}`,
+		classChip: (v: string) => `BR ${v}`,
+		inLabel: 'in',
+		stopsTitle: 'Halte',
+		stopsCount: (n: number) => `${n} ${n === 1 ? 'Halt' : 'Halte'}`,
+		arr: 'An',
+		dep: 'Ab',
+		onTime: 'pünktlich',
+		platformPrefix: 'Gl.',
 	};
 	const en: typeof de = {
 		pageTitle: 'Trip details',
@@ -139,6 +149,15 @@
 		popupSpeed: 'Speed',
 		popupNet: 'Network',
 		popupIce: 'ICE',
+		unitChip: (v: string) => `Unit ${v}`,
+		classChip: (v: string) => `Class ${v}`,
+		inLabel: 'in',
+		stopsTitle: 'Stops',
+		stopsCount: (n: number) => `${n} ${n === 1 ? 'stop' : 'stops'}`,
+		arr: 'Arr',
+		dep: 'Dep',
+		onTime: 'on time',
+		platformPrefix: 'Pl.',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
 
@@ -169,7 +188,7 @@
 			const known = new Set(data.samples.map((s) => s.id));
 			const merged = [...data.samples, ...res.samples.filter((s) => !known.has(s.id))];
 			merged.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
-			data = { trip: res.trip, samples: merged, asns: res.asns, serverTime: res.serverTime };
+			data = { trip: res.trip, samples: merged, asns: res.asns, stops: res.stops, serverTime: res.serverTime };
 			loadError = null;
 		} catch (err) {
 			// Live-Nachladen schlägt leise fehl (z.B. kurzer Netzwerkhänger); Anzeige bleibt auf altem Stand.
@@ -253,6 +272,31 @@
 	const lastSeenSecLive = $derived(
 		lastSample ? Math.max(0, Math.round((nowTick - new Date(lastSample.ts).getTime()) / 1000)) : null,
 	);
+
+	/** Prognose des ICE-Portals (nächster Status + verbleibende Sekunden) aus dem jüngsten Sample, das sie liefert. */
+	type IceForecast = { nextState: string; remainingS: number; sampleTs: string };
+	const iceForecast = $derived.by<IceForecast | null>(() => {
+		for (let i = (data?.samples.length ?? 0) - 1; i >= 0; i -= 1) {
+			const s = data!.samples[i];
+			if (s.iceNextState && s.iceRemainingS !== null && s.iceRemainingS !== undefined) {
+				return { nextState: s.iceNextState, remainingS: s.iceRemainingS, sampleTs: s.ts };
+			}
+		}
+		return null;
+	});
+	/** Verbleibende Sekunden der Prognose, läuft mit `nowTick` runter (nie unter 0). */
+	const iceForecastRemainingSec = $derived.by(() => {
+		if (!iceForecast) return null;
+		const elapsed = (nowTick - new Date(iceForecast.sampleTs).getTime()) / 1000;
+		return Math.max(0, Math.round(iceForecast.remainingS - elapsed));
+	});
+
+	/** Sekunden → "1:30". */
+	function fmtCountdown(sec: number): string {
+		const min = Math.floor(sec / 60);
+		const rest = sec % 60;
+		return `${min}:${String(rest).padStart(2, '0')}`;
+	}
 
 	function fmt(value: number | null, digits = 0): string {
 		return value === null ? '–' : fmtNumber(value, digits);
@@ -355,6 +399,58 @@
 		iceListOpen || iceSegments.length <= ICE_LIST_COLLAPSED ? [...iceSegments].reverse() : [...iceSegments].reverse().slice(0, ICE_LIST_COLLAPSED),
 	);
 
+	const stops = $derived(data?.stops ?? []);
+	/** Index des nächsten (noch nicht passierten) Halts, -1 wenn keiner. */
+	const nextStopIndex = $derived(stops.findIndex((s) => s.passed !== true));
+
+	/**
+	 * Verspätung eines Halts in Minuten (Ist − Plan), gerundet. Normalerweise anhand der Ankunft,
+	 * beim ersten Halt (keine Ankunft geplant) anhand der Abfahrt. `null`, solange der Ist-Wert fehlt.
+	 */
+	function stopDelayMin(s: TripStop): number | null {
+		const scheduled = s.scheduledArrival ?? s.scheduledDeparture;
+		const actual = s.scheduledArrival !== null ? s.actualArrival : s.actualDeparture;
+		if (scheduled === null || actual === null) return null;
+		return Math.round((new Date(actual).getTime() - new Date(scheduled).getTime()) / 60_000);
+	}
+	const nextStopDelayMin = $derived(nextStopIndex >= 0 ? stopDelayMin(stops[nextStopIndex]) : null);
+
+	/** Ampelfarbe für eine Verspätung (<=0 pünktlich/grün, 1-5 gelb, ab 6 rot). */
+	function delayColor(min: number | null): string {
+		if (min === null) return 'var(--fg-dim)';
+		if (min <= 0) return 'var(--accent)';
+		return min <= 5 ? 'var(--warn)' : 'var(--danger)';
+	}
+	function delayLabel(min: number | null): string {
+		if (min === null) return '';
+		return min <= 0 ? m.onTime : `+${min} min`;
+	}
+
+	/** Gleis-Text, bei Wechsel zwischen geplant/aktuell hervorgehoben ("Gl. 7 → 9"). */
+	function trackLabel(s: TripStop): string | null {
+		if (s.trackActual && s.trackScheduled && s.trackActual !== s.trackScheduled) {
+			return `${m.platformPrefix} ${s.trackScheduled} → ${s.trackActual}`;
+		}
+		const track = s.trackActual ?? s.trackScheduled;
+		return track ? `${m.platformPrefix} ${track}` : null;
+	}
+	function trackChanged(s: TripStop): boolean {
+		return !!(s.trackActual && s.trackScheduled && s.trackActual !== s.trackScheduled);
+	}
+
+	/** GeoJSON der Halte (nur mit Position) für die Bahnhofs-Marker auf der Karte. */
+	function stopsGeoJson() {
+		const withPos = stops.filter((s) => s.lat !== null && s.lon !== null);
+		return {
+			type: 'FeatureCollection' as const,
+			features: withPos.map((s) => ({
+				type: 'Feature' as const,
+				properties: { name: s.name, passed: s.passed === true },
+				geometry: { type: 'Point' as const, coordinates: [s.lon as number, s.lat as number] },
+			})),
+		};
+	}
+
 	function pointGeoJson() {
 		const samples = (data?.samples ?? []).filter((s) => s.lat !== null && s.lon !== null);
 		return {
@@ -407,8 +503,41 @@
 		const dark = theme.resolved === 'dark';
 		const stroke = dark ? '#0a0c10' : '#ffffff';
 		return createBaseStyle(
-			{ route: { type: 'geojson', data: pointGeoJson() } },
+			{
+				route: { type: 'geojson', data: pointGeoJson() },
+				stops: { type: 'geojson', data: stopsGeoJson() },
+			},
 			[
+				{
+					id: 'stops-points',
+					type: 'circle',
+					source: 'stops',
+					paint: {
+						'circle-radius': 4,
+						'circle-color': dark ? '#ffffff' : '#111418',
+						'circle-stroke-color': ['case', ['get', 'passed'], '#64748b', '#38bdf8'],
+						'circle-stroke-width': 2,
+					},
+				},
+				{
+					id: 'stops-labels',
+					type: 'symbol',
+					source: 'stops',
+					minzoom: 7,
+					layout: {
+						'text-field': ['get', 'name'],
+						'text-font': ['Noto Sans Regular'],
+						'text-size': 11,
+						'text-offset': [0, 0.9],
+						'text-anchor': 'top',
+						'text-optional': true,
+					},
+					paint: {
+						'text-color': dark ? '#e9ecf1' : '#111418',
+						'text-halo-color': dark ? '#0a0c10' : '#ffffff',
+						'text-halo-width': 1.2,
+					},
+				},
 				{
 					id: 'route-points',
 					type: 'circle',
@@ -520,6 +649,9 @@
 		if (!map) return;
 		const source = map.getSource('route');
 		if (source && source.type === 'geojson') (source as maplibregl.GeoJSONSource).setData(pointGeoJson());
+		// Halte können sich beim Live-Nachladen ändern (z.B. tatsächliche Zeiten/Gleise).
+		const stopsSource = map.getSource('stops');
+		if (stopsSource && stopsSource.type === 'geojson') (stopsSource as maplibregl.GeoJSONSource).setData(stopsGeoJson());
 		if (isLive && follow && lastSample && lastSample.lat !== null && lastSample.lon !== null) {
 			map.easeTo({ center: [lastSample.lon, lastSample.lat], duration: 400 });
 		}
@@ -696,6 +828,12 @@
 		<div class="hero__main">
 			<div class="hero__eyebrow">
 				<span class="chip chip--type">{trainTypeLabel(data.trip.trainType)}</span>
+				{#if data.trip.iceTzn}
+					<span class="chip">{m.unitChip(data.trip.iceTzn)}</span>
+				{/if}
+				{#if data.trip.iceSeries}
+					<span class="chip">{m.classChip(data.trip.iceSeries)}</span>
+				{/if}
 				{#if isLive}
 					<span class="live-badge" style="margin-left: 0">LIVE</span>
 				{:else if data.trip.status === 'flagged'}
@@ -707,6 +845,9 @@
 			<h1 class="hero__title">
 				{trainTitle}
 			</h1>
+			{#if data.trip.originName && data.trip.destinationName}
+				<p class="hero__route">{data.trip.originName} → {data.trip.destinationName}</p>
+			{/if}
 			<p class="hero__meta">
 				<span>{fmtDate(data.trip.startedAt, { weekday: 'short', day: '2-digit', month: 'long', year: 'numeric' })}</span>
 				<span class="dot" aria-hidden="true"></span>
@@ -743,6 +884,12 @@
 						{iceStateLabel(currentIceState)}
 					{:else}–{/if}
 				</span>
+				{#if iceForecast && iceForecastRemainingSec !== null}
+					<span class="live-tile__forecast">
+						<span class="state-dot" style="background: {ICE_STATE_COLORS[iceForecast.nextState] ?? '#64748b'}"></span>
+						→ {iceStateLabel(iceForecast.nextState)} {m.inLabel} {fmtCountdown(iceForecastRemainingSec)}
+					</span>
+				{/if}
 			</div>
 			<div class="live-tile">
 				<span class="live-tile__label">{m.network}</span>
@@ -877,6 +1024,39 @@
 		</section>
 	{/if}
 
+	{#if stops.length > 0}
+		<section class="card section">
+			<div class="section__head">
+				<h2>{m.stopsTitle}</h2>
+				<div class="section__head-right">
+					<span class="section__hint">{m.stopsCount(stops.length)}</span>
+					{#if nextStopDelayMin !== null}
+						<span class="delay-badge" style="color: {delayColor(nextStopDelayMin)}">{delayLabel(nextStopDelayMin)}</span>
+					{/if}
+				</div>
+			</div>
+			<ol class="stops">
+				{#each stops as s, i (s.seq)}
+					{@const delay = stopDelayMin(s)}
+					<li class="stop" class:stop--passed={s.passed === true} class:stop--next={i === nextStopIndex}>
+						<span class="stop__dot"></span>
+						<div class="stop__main">
+							<span class="stop__name">{s.name}</span>
+							<span class="stop__times">
+								{#if s.scheduledArrival}<span>{m.arr} {fmtTime(s.scheduledArrival)}</span>{/if}
+								{#if s.scheduledDeparture}<span>{m.dep} {fmtTime(s.scheduledDeparture)}</span>{/if}
+								{#if trackLabel(s)}<span class="stop__track" class:stop__track--changed={trackChanged(s)}>{trackLabel(s)}</span>{/if}
+							</span>
+						</div>
+						{#if delay !== null}
+							<span class="delay-badge" style="color: {delayColor(delay)}">{delayLabel(delay)}</span>
+						{/if}
+					</li>
+				{/each}
+			</ol>
+		</section>
+	{/if}
+
 	<section class="card section">
 		<div class="section__head">
 			<h2>{m.timeline}</h2>
@@ -983,6 +1163,13 @@
 		letter-spacing: -0.035em;
 		margin: 0 0 0.35rem;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.hero__route {
+		margin: 0 0 0.35rem;
+		color: var(--fg-dim);
+		font-size: 0.95rem;
+		font-weight: 600;
 	}
 
 	.hero__meta {
@@ -1099,6 +1286,15 @@
 		font-size: 1rem;
 		font-weight: 650;
 		min-height: 2.15rem;
+	}
+
+	.live-tile__forecast {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--fg-dim);
 	}
 
 	.live-tile__value.stale {
@@ -1373,6 +1569,13 @@
 		font-variant-numeric: tabular-nums;
 	}
 
+	.section__head-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
 	.muted {
 		color: var(--fg-dim);
 		margin: 0;
@@ -1522,6 +1725,114 @@
 		font-weight: 600;
 		font-size: 0.9rem;
 		cursor: pointer;
+	}
+
+	/* ---------- Halte ---------- */
+	.stops {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		position: relative;
+	}
+
+	.stops::before {
+		content: '';
+		position: absolute;
+		left: 0.3rem;
+		top: 0.9rem;
+		bottom: 0.9rem;
+		width: 2px;
+		background: var(--border);
+	}
+
+	.stop {
+		position: relative;
+		display: grid;
+		grid-template-columns: 1.4rem 1fr auto;
+		align-items: start;
+		gap: 0.6rem;
+		padding: 0.6rem 0;
+	}
+
+	.stop + .stop {
+		border-top: 1px dashed var(--border);
+	}
+
+	.stop__dot {
+		width: 0.75rem;
+		height: 0.75rem;
+		margin-top: 0.2rem;
+		border-radius: 50%;
+		background: var(--bg-card);
+		border: 2px solid var(--fg-faint);
+		box-sizing: border-box;
+		position: relative;
+		z-index: 1;
+	}
+
+	.stop--passed .stop__dot {
+		background: var(--fg-faint);
+		border-color: var(--fg-faint);
+	}
+
+	.stop--next .stop__dot {
+		background: var(--info);
+		border-color: var(--info);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--info) 30%, transparent);
+	}
+
+	.stop__main {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.stop__name {
+		font-weight: 650;
+		overflow-wrap: anywhere;
+	}
+
+	.stop--passed .stop__name,
+	.stop--passed .stop__times {
+		color: var(--fg-dim);
+	}
+
+	.stop__times {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.6rem;
+		margin-top: 0.15rem;
+		font-size: 0.85rem;
+		color: var(--fg-dim);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.stop__track--changed {
+		color: var(--warn);
+		font-weight: 700;
+	}
+
+	.delay-badge {
+		align-self: start;
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding: 0.15rem 0.5rem;
+		border-radius: 999px;
+		border: 1px solid currentColor;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+
+	@media (max-width: 380px) {
+		.stop {
+			grid-template-columns: 1.4rem 1fr;
+		}
+
+		.stop .delay-badge {
+			grid-column: 2;
+			justify-self: start;
+			margin-top: 0.3rem;
+		}
 	}
 
 	/* ---------- Diagramm ---------- */

@@ -24,6 +24,8 @@
 			speed: 'Geschwindigkeit',
 			loss: 'Verlust',
 			iceState: 'ICE-Status',
+			nextStop: 'Nächster Halt',
+			onTime: 'pünktlich',
 			dash: '–',
 			ago: (s: number | string) => `vor ${s} s`,
 		},
@@ -40,6 +42,8 @@
 			speed: 'Speed',
 			loss: 'loss',
 			iceState: 'ICE status',
+			nextStop: 'Next stop',
+			onTime: 'on time',
 			dash: '–',
 			ago: (s: number | string) => `${s} s ago`,
 		},
@@ -106,6 +110,8 @@
 					nets: t.nets,
 					iceState: t.iceState,
 					lastSeenSec: t.lastSeenSec,
+					nextStop: t.nextStop ?? null,
+					delayMin: t.delayMin ?? null,
 				},
 				geometry: { type: 'Point' as const, coordinates: [t.lon, t.lat] },
 			})),
@@ -160,12 +166,15 @@
 			)
 			.join('<br />');
 		const iceState = p.iceState as string | null;
+		const nextStop = p.nextStop as string | null;
+		const delayMin = p.delayMin as number | null;
 		return `
 			<strong>${p.label}</strong><br />
 			${t.popup.speed}: ${p.speedKmh !== null && p.speedKmh !== undefined ? Number(p.speedKmh).toFixed(0) : t.popup.dash} km/h<br />
 			${netLines}
 			${netLines ? '<br />' : ''}
 			${t.popup.iceState}: ${iceState ? iceStateLabel(iceState) : t.popup.dash}<br />
+			${nextStop ? `${t.popup.nextStop}: ${nextStop}${delayMin !== null ? ` (${delayMin === 0 ? t.popup.onTime : `+${delayMin} min`})` : ''}<br />` : ''}
 			${t.popup.ago(p.lastSeenSec as number | string)}
 		`;
 	}
