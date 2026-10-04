@@ -19,6 +19,9 @@ export interface LiveTripRow {
   /** Alter des Positions-Samples in ms (now - ts). */
   posAgeMs: number;
   iceState: string | null;
+  /** Nächster Halt laut ICE-Portal und Verspätung dort in Minuten (null = unbekannt). */
+  nextStop?: string | null;
+  delayMin?: number | null;
   pings: LivePing[];
 }
 
@@ -97,6 +100,7 @@ export function summarizeLiveTrains(rows: LiveTripRow[], signKey: (message: stri
     // Frischestes Tracker-Sample bestimmt lastSeenSec/iceState, falls sich mehrere unterscheiden.
     const freshest = members.reduce((a, b) => (a.posAgeMs <= b.posAgeMs ? a : b));
     const iceState = freshest.iceState ?? members.find((m) => m.iceState !== null)?.iceState ?? null;
+    const withStop = members.find((m) => m.nextStop) ?? null;
 
     const message = first.trainNumber ? label : `trip:${first.tripId}`;
     out.push({
@@ -109,6 +113,8 @@ export function summarizeLiveTrains(rows: LiveTripRow[], signKey: (message: stri
       nets,
       lastSeenSec: roundTo10Sec(freshest.posAgeMs),
       iceState,
+      nextStop: withStop?.nextStop ?? null,
+      delayMin: withStop?.delayMin ?? null,
     });
   }
   return out;

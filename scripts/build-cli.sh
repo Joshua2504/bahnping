@@ -11,6 +11,8 @@ mkdir -p "$DIST_DIR"
 
 VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
 echo "Baue bahnping $VERSION ..."
+# Für "bahnping update": Server liefert /dl/VERSION, die CLI vergleicht mit ihrer eigenen.
+printf '%s\n' "$VERSION" > "$DIST_DIR/VERSION"
 
 cd "$CLI_DIR"
 go vet ./...

@@ -100,21 +100,17 @@ func maxFloat(values []float64) *float64 {
 	return &m
 }
 
-// Compute berechnet ein WindowResult aus den im Fenster empfangenen RTTs (in
-// Empfangsreihenfolge), exakt wie PingWindowAggregator.flush() in windows.ts.
+// Compute berechnet die RTT-Statistik eines Fensters aus den empfangenen RTTs (in
+// Empfangsreihenfolge). N/Lost werden hier nur aus der Anzahl abgeleitet (kein Verlust);
+// die Verlustzählung über Sequenznummern macht Aggregator.Flush (siehe dort).
 func Compute(rtts []float64) WindowResult {
-	// Mehr Antworten als erwartet (Timer-Drift) zählen voll mit, wie in windows.ts.
-	n := ExpectedPingsPerWindow
-	if len(rtts) > n {
-		n = len(rtts)
-	}
-	lost := n - len(rtts)
-	if lost < 0 {
-		lost = 0
+	n := len(rtts)
+	if n == 0 {
+		n = ExpectedPingsPerWindow
 	}
 	return WindowResult{
 		N:         n,
-		Lost:      lost,
+		Lost:      n - len(rtts),
 		RttMin:    minFloat(rtts),
 		RttMedian: Median(rtts),
 		RttP90:    Percentile(rtts, 90),
@@ -125,23 +121,74 @@ func Compute(rtts []float64) WindowResult {
 
 // Aggregator sammelt RTT-Werte für das aktuelle Fenster, threadsicher nutzbar
 // (RTTs kommen aus dem WS-Lesegoroutine, Flush aus einem Timer).
+//
+// Verlust wird über die Sequenznummern der Server-Pings gezählt, nicht über eine erwartete
+// Anzahl je Fenster: Pings kommen jede Sekunde, Fenster werden alle WINDOW_MS geschnitten – durch
+// Timer-Drift landen mal 4, mal 6 Antworten in einem Fenster, was fälschlich als Verlust zählen
+// würde. Stattdessen: n = Anzahl Sequenznummern, die der Server seit der letzten empfangenen
+// Antwort des Vorfensters vergeben hat; lost = n − empfangen. Ein Fenster ganz ohne Antwort zählt
+// als komplett verloren (ExpectedPingsPerWindow) und schiebt den Zähler virtuell weiter, damit die
+// Lücke beim nächsten Fenster nicht doppelt zählt. Nach einem Reconnect (Sequenz springt zurück)
+// zählt nur die Lücke innerhalb des Fensters. Exakt wie PingWindowAggregator in windows.ts.
 type Aggregator struct {
-	mu   sync.Mutex
-	rtts []float64
+	mu     sync.Mutex
+	rtts   []float64
+	minSeq int
+	maxSeq int
+	// letzte empfangene Sequenznummer des Vorfensters, -1 = keine Vorgeschichte
+	prevLast int
+	started  bool
 }
 
-// AddRtt fügt einen RTT-Wert zum laufenden Fenster hinzu.
-func (a *Aggregator) AddRtt(rttMs float64) {
+// AddRtt fügt einen RTT-Wert (mit Sequenznummer des Server-Pings) zum laufenden Fenster hinzu.
+func (a *Aggregator) AddRtt(seq int, rttMs float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if len(a.rtts) == 0 || seq < a.minSeq {
+		a.minSeq = seq
+	}
+	if len(a.rtts) == 0 || seq > a.maxSeq {
+		a.maxSeq = seq
+	}
 	a.rtts = append(a.rtts, rttMs)
+}
+
+// Pending meldet, ob im laufenden Fenster schon Antworten liegen (für den letzten Flush beim
+// Beenden: ein angebrochenes Fenster ohne Antwort ist kein Verlust und wird verworfen).
+func (a *Aggregator) Pending() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.rtts) > 0
 }
 
 // Flush schließt das aktuelle Fenster ab und beginnt ein neues.
 func (a *Aggregator) Flush() WindowResult {
 	a.mu.Lock()
-	rtts := a.rtts
+	rtts, minSeq, maxSeq := a.rtts, a.minSeq, a.maxSeq
 	a.rtts = nil
+	if !a.started {
+		a.prevLast = -1
+		a.started = true
+	}
+	res := Compute(rtts)
+	received := len(rtts)
+	switch {
+	case received == 0:
+		res.N, res.Lost = ExpectedPingsPerWindow, ExpectedPingsPerWindow
+		if a.prevLast >= 0 {
+			a.prevLast += ExpectedPingsPerWindow
+		}
+	case a.prevLast < 0 || maxSeq < a.prevLast:
+		res.N = maxSeq - minSeq + 1
+		a.prevLast = maxSeq
+	default:
+		res.N = maxSeq - a.prevLast
+		a.prevLast = maxSeq
+	}
+	if res.N < received {
+		res.N = received
+	}
+	res.Lost = res.N - received
 	a.mu.Unlock()
-	return Compute(rtts)
+	return res
 }

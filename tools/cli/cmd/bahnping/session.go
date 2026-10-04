@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -55,15 +56,12 @@ func newTrackSession(ctx context.Context, cancel context.CancelFunc) *trackSessi
 
 // ---------- Position / Netz für Samples ----------
 
-func (s *trackSession) positionFields() (lat, lon, speedMps *float64, iceState *string, posSource string) {
-	if s.flags.noPosition {
-		return nil, nil, nil, nil, "none"
+// positionFields liefert Position/Tempo aus dem (frischen) Portal-Status; mit --no-position nichts.
+func (s *trackSession) positionFields(st *iceportal.Status) (lat, lon, speedMps *float64, posSource string) {
+	if s.flags.noPosition || st == nil || st.Latitude == nil || st.Longitude == nil {
+		return nil, nil, nil, "none"
 	}
-	st := s.poller.FreshStatus(positionMaxAge)
-	if st == nil || st.Latitude == nil || st.Longitude == nil {
-		return nil, nil, nil, nil, "none"
-	}
-	return st.Latitude, st.Longitude, st.SpeedMps(), st.IceState(), "iceportal"
+	return st.Latitude, st.Longitude, st.SpeedMps(), "iceportal"
 }
 
 func (s *trackSession) currentNetToken() *model.NetToken {
@@ -79,19 +77,152 @@ func (s *trackSession) setNetToken(t *model.NetToken) {
 }
 
 func (s *trackSession) buildSampleBase(kind string) model.Sample {
-	lat, lon, speedMps, iceState, posSource := s.positionFields()
+	// Der Konnektivitätsstatus (inkl. Prognose) wird auch mit --no-position mitgeschickt –
+	// er verrät keine Position, nur was das Portal gerade meldet.
+	st := s.poller.FreshStatus(positionMaxAge)
+	lat, lon, speedMps, posSource := s.positionFields(st)
+	var internet *string
+	if st != nil {
+		internet = st.Internet
+	}
 	return model.Sample{
-		ID:        model.NewID(),
-		Ts:        time.Now().UnixMilli(),
-		Lat:       lat,
-		Lon:       lon,
-		AccuracyM: nil,
-		SpeedMps:  speedMps,
-		Heading:   nil,
-		Net:       s.currentNetToken(),
-		IceState:  iceState,
-		PosSource: posSource,
-		Kind:      kind,
+		ID:            model.NewID(),
+		Ts:            time.Now().UnixMilli(),
+		Lat:           lat,
+		Lon:           lon,
+		AccuracyM:     nil,
+		SpeedMps:      speedMps,
+		Heading:       nil,
+		Net:           s.currentNetToken(),
+		IceState:      st.IceState(),
+		IceNextState:  st.IceNextState(),
+		IceRemainingS: st.IceRemainingS(),
+		IceInternet:   internet,
+		PosSource:     posSource,
+		Kind:          kind,
+	}
+}
+
+// ---------- Fahrt-Zusatzdaten und Halte aus dem ICE-Portal ----------
+
+const tripMetaSyncInterval = 10 * time.Second
+
+func msToRFC3339(ms *int64) *string {
+	if ms == nil || *ms <= 0 {
+		return nil
+	}
+	v := time.UnixMilli(*ms).UTC().Format(time.RFC3339)
+	return &v
+}
+
+// buildTripMeta leitet die Fahrt-Zusatzdaten (Triebzug, Baureihe, Fahrplantag, Start/Ziel) aus
+// Status und Fahrplan ab. Zugnummer/Gattung bleiben bewusst außen vor (siehe patchTrainNumberWhenKnown).
+func buildTripMeta(st *iceportal.Status, ti *iceportal.TripInfo) model.TripUpdate {
+	var upd model.TripUpdate
+	if st != nil {
+		upd.IceTzn = st.Tzn
+		upd.IceSeries = st.Series
+	}
+	if ti != nil {
+		upd.TripDate = ti.TripDate
+		if len(ti.Stops) > 0 && ti.Stops[0].StationName != nil {
+			upd.OriginName = ti.Stops[0].StationName
+		}
+		if ti.FinalStationName != nil {
+			upd.DestinationName = ti.FinalStationName
+		} else if n := len(ti.Stops); n > 0 && ti.Stops[n-1].StationName != nil {
+			upd.DestinationName = ti.Stops[n-1].StationName
+		}
+	}
+	return upd
+}
+
+// buildStops wandelt den Portal-Fahrplan in den API-Vertrag (TripStop) um; Halte ohne Namen entfallen.
+func buildStops(ti *iceportal.TripInfo) []model.TripStop {
+	if ti == nil {
+		return nil
+	}
+	out := make([]model.TripStop, 0, len(ti.Stops))
+	for i, s := range ti.Stops {
+		if s.StationName == nil {
+			continue
+		}
+		out = append(out, model.TripStop{
+			Seq:                i,
+			EvaNr:              s.EvaNr,
+			Name:               *s.StationName,
+			Lat:                s.Latitude,
+			Lon:                s.Longitude,
+			ScheduledArrival:   msToRFC3339(s.ScheduledArrivalTimeMs),
+			ActualArrival:      msToRFC3339(s.ActualArrivalTimeMs),
+			ScheduledDeparture: msToRFC3339(s.ScheduledDepartureTimeMs),
+			ActualDeparture:    msToRFC3339(s.ActualDepartureTimeMs),
+			TrackScheduled:     s.TrackScheduled,
+			TrackActual:        s.TrackActual,
+			Passed:             s.Passed,
+			PositionStatus:     s.PositionStatus,
+		})
+	}
+	return out
+}
+
+func fingerprint(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+// tripMetaSyncLoop schickt Zusatzdaten (PATCH) und Halteliste (PUT) an den Server, sobald sich
+// etwas ändert – so bleibt die Verspätungsentwicklung je Halt erhalten. Ältere Server ohne die
+// Halte-Route (404) werden einmal erkannt und danach nicht mehr behelligt.
+func (s *trackSession) tripMetaSyncLoop() {
+	ticker := time.NewTicker(tripMetaSyncInterval)
+	defer ticker.Stop()
+	var lastMeta, lastStops string
+	stopsUnsupported := false
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		st, _ := s.poller.Status()
+		ti, _ := s.poller.Trip()
+
+		upd := buildTripMeta(st, ti)
+		if fp := fingerprint(upd); fp != "{}" && fp != lastMeta {
+			if _, err := s.api.PatchTrip(s.ctx, s.trip.ID, upd); err == nil {
+				lastMeta = fp
+			} else if s.flags.debug {
+				fmt.Fprintf(os.Stderr, "[debug] PATCH Fahrt-Zusatzdaten fehlgeschlagen: %v\r\n", err)
+			}
+		}
+
+		if stopsUnsupported {
+			continue
+		}
+		stops := buildStops(ti)
+		if len(stops) == 0 {
+			continue
+		}
+		if fp := fingerprint(stops); fp != lastStops {
+			err := s.api.PutStops(s.ctx, s.trip.ID, model.TripStopsPut{Stops: stops})
+			switch {
+			case err == nil:
+				lastStops = fp
+			case apiclient.IsNotFound(err):
+				stopsUnsupported = true
+				if s.flags.debug {
+					fmt.Fprint(os.Stderr, "[debug] Server kennt PUT /api/trips/:id/stops nicht, Halte werden nicht gesendet.\r\n")
+				}
+			default:
+				if s.flags.debug {
+					fmt.Fprintf(os.Stderr, "[debug] PUT Halte fehlgeschlagen: %v\r\n", err)
+				}
+			}
+		}
 	}
 }
 
@@ -224,6 +355,8 @@ func (s *trackSession) updateIcePortalDisplay() {
 		if st == nil {
 			sn.IceSpeedKmh = nil
 			sn.IceState = ""
+			sn.IceNextState = ""
+			sn.IceRemainingS = nil
 			if s.flags.noPosition {
 				sn.PosLat, sn.PosLon, sn.PosSource = nil, nil, "none"
 			}
@@ -234,6 +367,18 @@ func (s *trackSession) updateIcePortalDisplay() {
 			sn.IceState = *state
 		} else {
 			sn.IceState = ""
+		}
+		sn.IceNextState = ""
+		if next := st.IceNextState(); next != nil {
+			sn.IceNextState = *next
+		}
+		sn.IceRemainingS = st.IceRemainingS()
+		sn.IceTzn, sn.IceSeries = "", ""
+		if st.Tzn != nil {
+			sn.IceTzn = *st.Tzn
+		}
+		if st.Series != nil {
+			sn.IceSeries = *st.Series
 		}
 		if s.flags.noPosition {
 			sn.PosLat, sn.PosLon, sn.PosSource = nil, nil, "none"
@@ -464,8 +609,11 @@ func (s *trackSession) renderLoop(kr *tui.KeyReader) {
 // ---------- Fahrtende ----------
 
 func (s *trackSession) finish() error {
-	// Letztes, ggf. unvollständiges Fenster abschließen.
-	s.handleWindow(s.aggregator.Flush())
+	// Letztes, unvollständiges Fenster abschließen – aber nur, wenn darin schon Antworten liegen
+	// (ein angebrochenes Fenster ohne Ping ist kein Verlust).
+	if s.aggregator.Pending() {
+		s.handleWindow(s.aggregator.Flush())
+	}
 
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

@@ -35,6 +35,18 @@ xattr -d com.apple.quarantine bahnping
 Danach `./bahnping version` zum Test, und am besten ins `PATH` legen, z.B.
 `mv bahnping /usr/local/bin/bahnping` oder `~/bin/bahnping`.
 
+## Aktualisieren
+
+```sh
+bahnping update
+```
+
+Lädt die zum System passende Binary von `<server>/dl/` (Server aus der gespeicherten Anmeldung,
+alternativ `bahnping update https://<dein-server>`) und ersetzt die laufende Datei. Vorher wird
+`/dl/VERSION` mit der eigenen Version verglichen; ist sie gleich, passiert nichts. Liegt die Datei in
+einem Verzeichnis ohne Schreibrecht (z.B. `/usr/local/bin`): `sudo bahnping update`. Ältere Versionen ohne
+diesen Befehl einmalig wie unter „Installation“ per `curl` ersetzen.
+
 ## Anmeldung
 
 1. Im Web unter **Konto → API-Tokens** ein neues Token anlegen (Format `bnt_…`, wird nur einmal
@@ -88,6 +100,13 @@ In der Live-Ansicht:
 - **Captive-Portal-Probe** (alle 10 s): `GET /api/net/probe`.
 - **Netzklasse** (alle 30 s): `GET /api/net/whoami`, signiertes Token wird an alle Samples der
   Gültigkeitsdauer angehängt.
+- **ICE-Portal-Status** je Sample: `iceState` (aktueller Konnektivitätsstatus), die Prognose des Portals
+  `iceNextState`/`iceRemainingS` (nächster Status und Sekunden bis dahin) und der Indikator `iceInternet`.
+  Wird auch mit `--no-position` gesendet (enthält keine Position).
+- **Fahrt-Zusatzdaten** (`PATCH /api/trips/:id`, bei Änderung, höchstens alle 10 s): Triebzugnummer
+  (`tzn`, z.B. ICE9012), Baureihe (`series`), Fahrplantag, Start- und Zielbahnhof.
+- **Halte** (`PUT /api/trips/:id/stops`, bei Änderung): kompletter Fahrplan mit Soll-/Ist-Zeiten, Gleis,
+  Position der Bahnhöfe und `passed` – so wird die Verspätungsentwicklung je Halt festgehalten.
 - **Position**: aus der ICE-Portal-API (`GET /api1/rs/status`, abgefragt alle 2 s; Fahrtdaten alle 30 s), wenn diese erreichbar ist und der
   letzte erfolgreiche Abruf jünger als 15 s ist; sonst `posSource=none` (keine Position, auch kein
   GPS – das kann die CLI auf einem Laptop nicht).

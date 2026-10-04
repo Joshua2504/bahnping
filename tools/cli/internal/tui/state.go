@@ -32,9 +32,15 @@ type Snapshot struct {
 
 	IcePortalAvailable bool
 	// Letzter Fehler beim Abruf des ICE-Portals (kurz, für die Anzeige)
-	IcePortalError   string
-	IceSpeedKmh      *float64
-	IceState         string
+	IcePortalError string
+	IceSpeedKmh    *float64
+	IceState       string
+	// Prognose des Portals: nächster Status und Sekunden bis dahin
+	IceNextState  string
+	IceRemainingS *int64
+	// Triebzugnummer und Baureihe (z.B. ICE9012, 412)
+	IceTzn           string
+	IceSeries        string
 	NextStopName     string
 	NextStopDelayMin *int
 

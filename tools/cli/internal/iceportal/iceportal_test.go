@@ -78,7 +78,7 @@ func TestParseStatusStringNumbers(t *testing.T) {
 	if st.SpeedKmh == nil || *st.SpeedKmh != 231.5 {
 		t.Fatalf("Speed (als String) falsch: %v", st.SpeedKmh)
 	}
-	if st.Internet == nil || !*st.Internet {
+	if st.Internet == nil || *st.Internet != "true" {
 		t.Fatalf("Internet (als String) falsch: %v", st.Internet)
 	}
 	if st.Connectivity.RemainingTimeSeconds == nil || *st.Connectivity.RemainingTimeSeconds != 120 {

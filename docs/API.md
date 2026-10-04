@@ -62,11 +62,26 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   Wird dabei die Zugnummer einer aktiven Fahrt gesetzt und passt eine vorherige Fahrt nach denselben
   Regeln wie beim Fortsetzen, werden deren Samples in diese Fahrt übernommen (`startedAt` der älteren),
   die ältere Fahrt wird gelöscht. Die ID der aktiven Fahrt bleibt erhalten.
+  Zusätzlich (CLI, aus dem ICE-Portal): `iceTzn` (Triebzugnummer, physische Einheit, z.B. "ICE9012"),
+  `iceSeries` (Baureihe, z.B. "412"), `tripDate` (YYYY-MM-DD), `originName`, `destinationName` →
+  `trips.ice_tzn`/`ice_series`/`trip_date`/`origin_name`/`destination_name`, werden in `Trip` zurückgegeben.
+- `PUT /api/trips/:id/stops` Body `TripStopsPut` (`{ stops: TripStop[] }`, max. 200) → `204` (nur eigene,
+  sonst 404). Ersetzt die Halteliste der Fahrt komplett (Tabelle `trip_stops`, PK `trip_id, seq`): je Halt
+  `seq`, `evaNr`, `name`, `lat`/`lon`, Soll-/Ist-Ankunft und -Abfahrt (ISO), Gleis soll/ist, `passed`,
+  `positionStatus`. Die CLI sendet den Stand nur bei Änderung (Fingerprint), höchstens alle 10 s; so bleibt
+  je Fahrt der letzte Stand inkl. Ist-Zeiten (Verspätungsentwicklung) erhalten.
 - `POST /api/trips/:id/samples` Body `SampleBatch` (JSON; optional `Content-Encoding: gzip`) → `200 SampleBatchResponse`.
   - idempotent über `id` (ON CONFLICT DO NOTHING → zählt als `duplicates`).
+  - `n`/`lost` eines Ping-Fensters zählt der Client über die Sequenznummern der Server-Pings: `n` =
+    Anzahl Sequenznummern seit der letzten empfangenen Antwort des Vorfensters, `lost = n − empfangen`.
+    Ein Fenster ohne jede Antwort zählt als `WINDOW_MS / PING_INTERVAL_MS` verloren. So erzeugt Timer-Drift
+    (mal 4, mal 6 Antworten je 5-s-Fenster) keinen Scheinverlust (`windows.ts`, CLI `stats.Aggregator`).
   - Server berechnet `ts = client ts + trip.clockOffsetMs`, `h3_r8`/`h3_r9` aus lat/lon (h3-js `latLngToCell`).
   - `iceState`/`posSource` (siehe Schema `Sample` in `packages/shared`) werden unverändert in
     `samples.ice_state`/`samples.pos_source` übernommen und von `GET /api/trips/:id/samples` zurückgegeben.
+    Ebenso die Portal-Prognose `iceNextState`/`iceRemainingS` (`connectivity.nextState`/
+    `remainingTimeSeconds`) und der separate Indikator `iceInternet` (`internet`, z.B. HIGH/OFFLINE) →
+    `samples.ice_next_state`/`ice_remaining_s`/`ice_internet`.
   - `net`-Token: Signatur prüfen (HMAC wie whoami). Gültig → `asn`, `net_class`, `ip_version` übernehmen,
     auch wenn `exp` abgelaufen ist (Offline-Upload). Ungültig → `net_class=unknown` + Flag `net_sig_invalid`.
   - Flags statt Ablehnung: `out_of_bbox` (außerhalb `BBOX`), `bad_accuracy` (> MAX_ACCURACY_M),
@@ -75,7 +90,8 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   - aktualisiert `trips.last_sample_at`.
 - `GET /api/trips/:id/samples?since=<ISO>` → `200 TripSamples` (öffentlich ohne Auth, Zugriff über die
   nicht erratbare Fahrt-ID; unbekannte/ungültige ID → 404):
-  `{ trip, samples, asns, serverTime }`. `samples` enthält alle Samples der Fahrt in zeitlicher
+  `{ trip, samples, asns, stops, serverTime }`. `stops` ist die Halteliste (`TripStop[]`, nach `seq`;
+  leer bei Browser-Fahrten). `samples` enthält alle Samples der Fahrt in zeitlicher
   Reihenfolge (reduzierte Felder, siehe Schema `TripSample`), `asns` die je ASN gesehenen Samples
   (`asn`, `name`, `netClass`, `samples`, stets über die gesamte Fahrt, unabhängig von `since`).
   Jedes Sample liefert zusätzlich `iceState`/`posSource` (noch nicht Teil des `TripSample`-Schemas in
@@ -154,6 +170,8 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
     Fahrten mit gleicher Zugnummer + gleichem Zugtyp werden zu einem Eintrag zusammengefasst
     (reine Zusammenfassung/Rundung in `apps/api/src/lib/liveTrains.ts`, per Vitest getestet):
     - `label`: `train_type`-Label + Zugnummer (z.B. "ICE 1077"), ohne Nummer nur das Typ-Label.
+    - `nextStop`/`delayMin`: erster nicht passierter Halt aus `trip_stops` und Verspätung dort in Minuten
+      (Ist − Soll der Ankunft), `null` wenn unbekannt (Browser-Fahrten).
     - `lat`/`lon`: Mittel der letzten Positionen der zusammengefassten Fahrten, je auf 2
       Nachkommastellen gerundet (~1 km Genauigkeit).
     - `speedKmh`: Mittel der letzten `speed_mps`-Werte (sofern vorhanden) in km/h, ganzzahlig

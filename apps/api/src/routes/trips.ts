@@ -8,14 +8,16 @@ import {
   TripCreate,
   TripEnd,
   TripSamplesQuery,
+  TripStopsPut,
   TripUpdate,
   type NetClass,
   type Trip,
   type TripSample,
   type TripSamples,
+  type TripStop,
 } from '@bahn/shared';
 import type { Db } from '../db/client.js';
-import { asnCatalog, samples, trips } from '../db/schema.js';
+import { asnCatalog, samples, trips, tripStops } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { verifyNetToken } from '../lib/netToken.js';
@@ -34,7 +36,39 @@ function toTrip(row: typeof trips.$inferSelect, sampleCount?: number): Trip {
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     status: row.status as Trip['status'],
     ...(sampleCount !== undefined ? { sampleCount } : {}),
+    iceTzn: row.iceTzn,
+    iceSeries: row.iceSeries,
+    tripDate: row.tripDate,
+    originName: row.originName,
+    destinationName: row.destinationName,
   };
+}
+
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+function toStop(row: typeof tripStops.$inferSelect): TripStop {
+  return {
+    seq: row.seq,
+    evaNr: row.evaNr,
+    name: row.name,
+    lat: row.lat,
+    lon: row.lon,
+    scheduledArrival: iso(row.scheduledArrival),
+    actualArrival: iso(row.actualArrival),
+    scheduledDeparture: iso(row.scheduledDeparture),
+    actualDeparture: iso(row.actualDeparture),
+    trackScheduled: row.trackScheduled,
+    trackActual: row.trackActual,
+    passed: row.passed,
+    positionStatus: row.positionStatus,
+  };
+}
+
+/** ISO-String → Date, ungültige Werte werden null (Portal liefert gelegentlich leere Strings). */
+function parseIsoDate(value: string | null): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /** Letzte Aktivität einer Fahrt (letztes Sample, sonst Ende, sonst Start). */
@@ -161,6 +195,11 @@ export function registerTripRoutes(app: FastifyInstance): void {
     const patch: Partial<typeof trips.$inferInsert> = {};
     if (body.trainType !== undefined) patch.trainType = body.trainType;
     if (body.trainNumber !== undefined) patch.trainNumber = normalizeTrainNumber(body.trainNumber);
+    if (body.iceTzn !== undefined) patch.iceTzn = body.iceTzn || null;
+    if (body.iceSeries !== undefined) patch.iceSeries = body.iceSeries || null;
+    if (body.tripDate !== undefined) patch.tripDate = body.tripDate || null;
+    if (body.originName !== undefined) patch.originName = body.originName || null;
+    if (body.destinationName !== undefined) patch.destinationName = body.destinationName || null;
     const updated = await db.transaction(async (tx) => {
       let row = Object.keys(patch).length > 0 ? (await tx.update(trips).set(patch).where(eq(trips.id, id)).returning())[0] : existing[0];
       // Wird die Zugnummer erst nachträglich bekannt (CLI), kurz vorher beendete Fahrt im selben Zug
@@ -176,6 +215,50 @@ export function registerTripRoutes(app: FastifyInstance): void {
       return row;
     });
     reply.send(toTrip(updated));
+  });
+
+  // Halteliste laut ICE-Portal komplett ersetzen (CLI, sobald sich Zeiten/Gleise ändern).
+  app.put('/api/trips/:id/stops', { preHandler: app.requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = parseOrProblem(TripStopsPut, request.body, reply);
+    if (!body) return;
+    const existing = await db
+      .select({ id: trips.id })
+      .from(trips)
+      .where(and(eq(trips.id, id), eq(trips.userId, request.userId!)))
+      .limit(1);
+    if (!existing[0]) {
+      sendProblem(reply, 404, 'Fahrt nicht gefunden');
+      return;
+    }
+    // Doppelte seq-Werte wären ein PK-Konflikt: letzter gewinnt.
+    const bySeq = new Map<number, TripStop>();
+    for (const s of body.stops) bySeq.set(s.seq, s);
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tx.delete(tripStops).where(eq(tripStops.tripId, id));
+      if (bySeq.size === 0) return;
+      await tx.insert(tripStops).values(
+        [...bySeq.values()].map((s) => ({
+          tripId: id,
+          seq: s.seq,
+          evaNr: s.evaNr,
+          name: s.name,
+          lat: s.lat,
+          lon: s.lon,
+          scheduledArrival: parseIsoDate(s.scheduledArrival),
+          actualArrival: parseIsoDate(s.actualArrival),
+          scheduledDeparture: parseIsoDate(s.scheduledDeparture),
+          actualDeparture: parseIsoDate(s.actualDeparture),
+          trackScheduled: s.trackScheduled,
+          trackActual: s.trackActual,
+          passed: s.passed,
+          positionStatus: s.positionStatus,
+          updatedAt: now,
+        })),
+      );
+    });
+    reply.code(204).send();
   });
 
   // Öffentlich: Wer die (nicht erratbare) Fahrt-ID kennt, kann die Fahrt ansehen (Teilen per Link).
@@ -206,9 +289,7 @@ export function registerTripRoutes(app: FastifyInstance): void {
       .where(sampleConditions)
       .orderBy(asc(samples.ts));
 
-    // Zusätzlich zu TripSample (packages/shared) liefern wir iceState/posSource als lose Erweiterung
-    // mit aus (das Schema selbst bleibt unverändert, siehe apps/web TripSampleExt).
-    const tripSamples: (TripSample & { iceState: string | null; posSource: string | null })[] = sampleRows.map((s) => ({
+    const tripSamples: TripSample[] = sampleRows.map((s) => ({
       id: s.id,
       ts: s.ts.toISOString(),
       kind: s.kind as TripSample['kind'],
@@ -231,8 +312,13 @@ export function registerTripRoutes(app: FastifyInstance): void {
       netClass: s.netClass as NetClass,
       flags: s.flags,
       iceState: s.iceState,
+      iceNextState: s.iceNextState,
+      iceRemainingS: s.iceRemainingS,
+      iceInternet: s.iceInternet,
       posSource: s.posSource,
     }));
+
+    const stopRows = await db.select().from(tripStops).where(eq(tripStops.tripId, tripId)).orderBy(asc(tripStops.seq));
 
     const asnStats = await db
       .select({
@@ -261,6 +347,7 @@ export function registerTripRoutes(app: FastifyInstance): void {
     const response: TripSamples = {
       trip: toTrip(trip, totalSampleCount),
       samples: tripSamples,
+      stops: stopRows.map(toStop),
       asns: asnStats.map((r) => ({
         asn: r.asn as number,
         name: r.name ?? `ASN ${r.asn}`,
@@ -414,6 +501,9 @@ export function registerTripRoutes(app: FastifyInstance): void {
         connType: s.connType ?? null,
         effectiveType: s.effectiveType ?? null,
         iceState: s.iceState ?? null,
+        iceNextState: s.iceNextState ?? null,
+        iceRemainingS: s.iceRemainingS ?? null,
+        iceInternet: s.iceInternet ?? null,
         posSource: s.posSource ?? null,
         flags,
         n: s.kind === 'ping_window' ? s.n : null,

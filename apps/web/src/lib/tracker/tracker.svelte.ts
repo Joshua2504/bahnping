@@ -315,7 +315,7 @@ class Tracker {
 			};
 			this.socket = new TrackerSocket({
 				onStateChange: (s) => (this.wsState = s),
-				onRtt: (rtt) => this.handleRtt(rtt),
+				onRtt: (rtt, seq) => this.handleRtt(rtt, seq),
 				onClockOffset: (offset) => {
 					this.clockOffsetMs = offset;
 					finish();
@@ -386,9 +386,9 @@ class Tracker {
 		}
 	};
 
-	private handleRtt(rttMs: number): void {
+	private handleRtt(rttMs: number, seq: number): void {
 		this.currentRtt = rttMs;
-		this.windowAgg?.addRtt(rttMs);
+		this.windowAgg?.addRtt(rttMs, seq);
 		this.rttHistory = [...this.rttHistory.slice(-(RTT_HISTORY_MAX - 1)), { t: Date.now(), rtt: rttMs }];
 	}
 

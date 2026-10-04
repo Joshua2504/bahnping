@@ -63,11 +63,11 @@ func TestComputeFullWindow(t *testing.T) {
 	}
 }
 
-func TestComputePartialWindowLost(t *testing.T) {
-	// Nur 2 von 5 erwarteten Pings beantwortet.
+func TestComputeCountsOnlyReceived(t *testing.T) {
+	// Compute kennt keine Sequenznummern: n = empfangen, kein Verlust (Verlust zählt Aggregator.Flush).
 	res := Compute([]float64{10, 20})
-	if res.N != 5 || res.Lost != 3 {
-		t.Fatalf("lost falsch: n=%d lost=%d", res.N, res.Lost)
+	if res.N != 2 || res.Lost != 0 {
+		t.Fatalf("n/lost falsch: n=%d lost=%d", res.N, res.Lost)
 	}
 }
 
@@ -83,14 +83,55 @@ func TestComputeEmptyWindowAllLost(t *testing.T) {
 
 func TestAggregatorFlushResetsWindow(t *testing.T) {
 	var agg Aggregator
-	agg.AddRtt(10)
-	agg.AddRtt(20)
+	agg.AddRtt(1, 10)
+	agg.AddRtt(2, 20)
 	first := agg.Flush()
-	if first.Lost != 3 {
-		t.Fatalf("erstes Fenster: lost=%d", first.Lost)
+	// Erstes Fenster ohne Vorgeschichte: Sequenzen 1,2 lückenlos → n=2, kein Verlust.
+	if first.N != 2 || first.Lost != 0 {
+		t.Fatalf("erstes Fenster: n=%d lost=%d", first.N, first.Lost)
 	}
 	second := agg.Flush()
 	if second.Lost != 5 {
 		t.Fatalf("zweites Fenster sollte komplett leer sein: lost=%d", second.Lost)
+	}
+}
+
+func TestAggregatorSequenceLoss(t *testing.T) {
+	agg := &Aggregator{}
+	// Fenster 1: 4 Antworten (Drift), lückenlos → kein Verlust.
+	for seq := 1; seq <= 4; seq++ {
+		agg.AddRtt(seq, 10)
+	}
+	if r := agg.Flush(); r.N != 4 || r.Lost != 0 {
+		t.Fatalf("Fenster 1: n=%d lost=%d, erwartet 4/0", r.N, r.Lost)
+	}
+	// Fenster 2: 6 Antworten, lückenlos → kein Verlust.
+	for seq := 5; seq <= 10; seq++ {
+		agg.AddRtt(seq, 10)
+	}
+	if r := agg.Flush(); r.N != 6 || r.Lost != 0 {
+		t.Fatalf("Fenster 2: n=%d lost=%d, erwartet 6/0", r.N, r.Lost)
+	}
+	// Fenster 3: 11 fehlt, 12 und 14 kommen, 13 fehlt → n=4, lost=2.
+	agg.AddRtt(12, 10)
+	agg.AddRtt(14, 10)
+	if r := agg.Flush(); r.N != 4 || r.Lost != 2 {
+		t.Fatalf("Fenster 3: n=%d lost=%d, erwartet 4/2", r.N, r.Lost)
+	}
+	// Fenster 4: nichts → komplett verloren; Fenster 5 zählt die Lücke nicht erneut.
+	if r := agg.Flush(); r.N != ExpectedPingsPerWindow || r.Lost != ExpectedPingsPerWindow {
+		t.Fatalf("Fenster 4: n=%d lost=%d", r.N, r.Lost)
+	}
+	for seq := 20; seq <= 24; seq++ {
+		agg.AddRtt(seq, 10)
+	}
+	if r := agg.Flush(); r.N != 5 || r.Lost != 0 {
+		t.Fatalf("Fenster 5: n=%d lost=%d, erwartet 5/0 (Lücke bereits in Fenster 4 gezählt)", r.N, r.Lost)
+	}
+	// Reconnect: Sequenz springt zurück → nur Lücke innerhalb des Fensters.
+	agg.AddRtt(1, 10)
+	agg.AddRtt(3, 10)
+	if r := agg.Flush(); r.N != 3 || r.Lost != 1 {
+		t.Fatalf("Reconnect: n=%d lost=%d, erwartet 3/1", r.N, r.Lost)
 	}
 }

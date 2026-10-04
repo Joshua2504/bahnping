@@ -39,3 +39,35 @@ func TestRealTrip(t *testing.T) {
 		t.Fatalf("nächster Halt falsch: %+v", next)
 	}
 }
+
+func TestParseRealExtraFields(t *testing.T) {
+	st, err := ParseStatus([]byte(realStatus))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Series == nil || *st.Series != "412" {
+		t.Fatalf("Series falsch: %v", st.Series)
+	}
+	if st.Vzn == nil || *st.Vzn != "1077" {
+		t.Fatalf("Vzn (als Zahl) falsch: %v", st.Vzn)
+	}
+	if st.Internet == nil || *st.Internet != "OFFLINE" {
+		t.Fatalf("Internet falsch: %v", st.Internet)
+	}
+	if st.IceNextState() != nil || st.IceRemainingS() != nil {
+		t.Fatalf("Prognose sollte fehlen: %v %v", st.IceNextState(), st.IceRemainingS())
+	}
+	ti, err := ParseTripInfo([]byte(realTrip))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ti.TripDate == nil || *ti.TripDate != "2026-10-04" {
+		t.Fatalf("TripDate falsch: %v", ti.TripDate)
+	}
+	if len(ti.Stops) != 2 || ti.Stops[0].EvaNr == nil || *ti.Stops[0].EvaNr != "8002549" {
+		t.Fatalf("EvaNr falsch: %+v", ti.Stops)
+	}
+	if ti.Stops[1].PositionStatus == nil || *ti.Stops[1].PositionStatus != "future" {
+		t.Fatalf("PositionStatus falsch: %+v", ti.Stops[1])
+	}
+}

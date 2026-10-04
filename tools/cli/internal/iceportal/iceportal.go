@@ -121,9 +121,18 @@ type Status struct {
 	SpeedKmh     *float64
 	ServerTimeMs *int64
 	TrainType    *string
-	Tzn          *string
+	// Triebzugnummer (physische Einheit, z.B. "ICE9012") – nicht die Zugnummer (vzn).
+	Tzn *string
+	// Zugnummer laut Status (vzn, z.B. "1077"); tripInfo liefert sie ebenfalls.
+	Vzn *string
+	// Baureihe, z.B. "412" (ICE 4).
+	Series       *string
+	WagonClass   *string
+	ServiceLevel *string
 	GpsStatus    *string
-	Internet     *bool
+	// Internet-Indikator des Portals: in der Praxis ein String (z.B. "HIGH", "OFFLINE"),
+	// in älteren Varianten ein Bool – beides wird auf einen String abgebildet ("true"/"false").
+	Internet     *string
 	Connectivity *Connectivity
 	FetchedAt    time.Time
 	Raw          string
@@ -151,6 +160,34 @@ func (s *Status) IceState() *string {
 	return s.Connectivity.CurrentState
 }
 
+// IceNextState liefert connectivity.nextState (Prognose), oder nil.
+func (s *Status) IceNextState() *string {
+	if s == nil || s.Connectivity == nil {
+		return nil
+	}
+	return s.Connectivity.NextState
+}
+
+// IceRemainingS liefert connectivity.remainingTimeSeconds (Sekunden bis zum nächsten Status), oder nil.
+func (s *Status) IceRemainingS() *int64 {
+	if s == nil || s.Connectivity == nil {
+		return nil
+	}
+	return s.Connectivity.RemainingTimeSeconds
+}
+
+// asInternet bildet das Feld internet (String oder Bool) auf einen String ab.
+func asInternet(raw json.RawMessage) *string {
+	if s := asString(raw); s != nil {
+		return s
+	}
+	if b := asBool(raw); b != nil {
+		v := strconv.FormatBool(*b)
+		return &v
+	}
+	return nil
+}
+
 type rawConnectivity struct {
 	CurrentState         json.RawMessage `json:"currentState"`
 	NextState            json.RawMessage `json:"nextState"`
@@ -164,6 +201,10 @@ type rawStatus struct {
 	ServerTime   json.RawMessage  `json:"serverTime"`
 	TrainType    json.RawMessage  `json:"trainType"`
 	Tzn          json.RawMessage  `json:"tzn"`
+	Vzn          json.RawMessage  `json:"vzn"`
+	Series       json.RawMessage  `json:"series"`
+	WagonClass   json.RawMessage  `json:"wagonClass"`
+	ServiceLevel json.RawMessage  `json:"serviceLevel"`
 	GpsStatus    json.RawMessage  `json:"gpsStatus"`
 	Internet     json.RawMessage  `json:"internet"`
 	Connectivity *rawConnectivity `json:"connectivity"`
@@ -182,8 +223,12 @@ func ParseStatus(data []byte) (*Status, error) {
 		ServerTimeMs: asInt64(raw.ServerTime),
 		TrainType:    asString(raw.TrainType),
 		Tzn:          asString(raw.Tzn),
+		Vzn:          asString(raw.Vzn),
+		Series:       asString(raw.Series),
+		WagonClass:   asString(raw.WagonClass),
+		ServiceLevel: asString(raw.ServiceLevel),
 		GpsStatus:    asString(raw.GpsStatus),
-		Internet:     asBool(raw.Internet),
+		Internet:     asInternet(raw.Internet),
 		FetchedAt:    time.Now(),
 		Raw:          string(data),
 	}
@@ -199,14 +244,23 @@ func ParseStatus(data []byte) (*Status, error) {
 
 // Stop entspricht einem Eintrag in trip.stops[].
 type Stop struct {
-	StationName            *string
-	ScheduledArrivalTimeMs *int64
-	ActualArrivalTimeMs    *int64
-	Passed                 *bool
+	EvaNr                    *string
+	StationName              *string
+	Latitude                 *float64
+	Longitude                *float64
+	ScheduledArrivalTimeMs   *int64
+	ActualArrivalTimeMs      *int64
+	ScheduledDepartureTimeMs *int64
+	ActualDepartureTimeMs    *int64
+	TrackScheduled           *string
+	TrackActual              *string
+	Passed                   *bool
+	PositionStatus           *string
 }
 
 // TripInfo entspricht GET /api1/rs/tripInfo/trip.
 type TripInfo struct {
+	TripDate         *string
 	TrainType        *string
 	Vzn              *string
 	FinalStationName *string
@@ -214,25 +268,40 @@ type TripInfo struct {
 	Raw              string
 }
 
+type rawGeo struct {
+	Latitude  json.RawMessage `json:"latitude"`
+	Longitude json.RawMessage `json:"longitude"`
+}
 type rawStation struct {
-	Name json.RawMessage `json:"name"`
+	EvaNr          json.RawMessage `json:"evaNr"`
+	Name           json.RawMessage `json:"name"`
+	Geocoordinates *rawGeo         `json:"geocoordinates"`
 }
 type rawTimetable struct {
-	ScheduledArrivalTime json.RawMessage `json:"scheduledArrivalTime"`
-	ActualArrivalTime    json.RawMessage `json:"actualArrivalTime"`
+	ScheduledArrivalTime   json.RawMessage `json:"scheduledArrivalTime"`
+	ActualArrivalTime      json.RawMessage `json:"actualArrivalTime"`
+	ScheduledDepartureTime json.RawMessage `json:"scheduledDepartureTime"`
+	ActualDepartureTime    json.RawMessage `json:"actualDepartureTime"`
+}
+type rawTrack struct {
+	Scheduled json.RawMessage `json:"scheduled"`
+	Actual    json.RawMessage `json:"actual"`
 }
 type rawStopInfoFlags struct {
-	Passed json.RawMessage `json:"passed"`
+	Passed         json.RawMessage `json:"passed"`
+	PositionStatus json.RawMessage `json:"positionStatus"`
 }
 type rawStop struct {
 	Station   *rawStation       `json:"station"`
 	Timetable *rawTimetable     `json:"timetable"`
+	Track     *rawTrack         `json:"track"`
 	Info      *rawStopInfoFlags `json:"info"`
 }
 type rawStopInfo struct {
 	FinalStationName json.RawMessage `json:"finalStationName"`
 }
 type rawTrip struct {
+	TripDate  json.RawMessage `json:"tripDate"`
 	TrainType json.RawMessage `json:"trainType"`
 	Vzn       json.RawMessage `json:"vzn"`
 	StopInfo  *rawStopInfo    `json:"stopInfo"`
@@ -252,6 +321,7 @@ func ParseTripInfo(data []byte) (*TripInfo, error) {
 	if raw.Trip == nil {
 		return ti, nil
 	}
+	ti.TripDate = asString(raw.Trip.TripDate)
 	ti.TrainType = asString(raw.Trip.TrainType)
 	ti.Vzn = asString(raw.Trip.Vzn)
 	if raw.Trip.StopInfo != nil {
@@ -260,14 +330,26 @@ func ParseTripInfo(data []byte) (*TripInfo, error) {
 	for _, s := range raw.Trip.Stops {
 		stop := Stop{}
 		if s.Station != nil {
+			stop.EvaNr = asString(s.Station.EvaNr)
 			stop.StationName = asString(s.Station.Name)
+			if s.Station.Geocoordinates != nil {
+				stop.Latitude = asFloat(s.Station.Geocoordinates.Latitude)
+				stop.Longitude = asFloat(s.Station.Geocoordinates.Longitude)
+			}
 		}
 		if s.Timetable != nil {
 			stop.ScheduledArrivalTimeMs = asInt64(s.Timetable.ScheduledArrivalTime)
 			stop.ActualArrivalTimeMs = asInt64(s.Timetable.ActualArrivalTime)
+			stop.ScheduledDepartureTimeMs = asInt64(s.Timetable.ScheduledDepartureTime)
+			stop.ActualDepartureTimeMs = asInt64(s.Timetable.ActualDepartureTime)
+		}
+		if s.Track != nil {
+			stop.TrackScheduled = asString(s.Track.Scheduled)
+			stop.TrackActual = asString(s.Track.Actual)
 		}
 		if s.Info != nil {
 			stop.Passed = asBool(s.Info.Passed)
+			stop.PositionStatus = asString(s.Info.PositionStatus)
 		}
 		ti.Stops = append(ti.Stops, stop)
 	}

@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -84,12 +85,50 @@ export const trips = pgTable(
     endedAt: timestamp('ended_at', { withTimezone: true }),
     lastSampleAt: timestamp('last_sample_at', { withTimezone: true }),
     status: text('status').notNull().default('active'),
+    // Zusatzdaten aus dem ICE-Portal (nur CLI-Fahrten), siehe TripUpdate in packages/shared.
+    /** Triebzugnummer (physische Einheit, z.B. "ICE9012") */
+    iceTzn: text('ice_tzn'),
+    /** Baureihe (z.B. "412" = ICE 4) */
+    iceSeries: text('ice_series'),
+    /** Fahrplantag YYYY-MM-DD */
+    tripDate: text('trip_date'),
+    originName: text('origin_name'),
+    destinationName: text('destination_name'),
   },
-  (t) => [index('trips_user_idx').on(t.userId, t.startedAt)],
+  (t) => [index('trips_user_idx').on(t.userId, t.startedAt), index('trips_tzn_idx').on(t.iceTzn)],
 );
 
 /**
- * Messwerte. Eine Zeile je 10-s-Ping-Fenster, Speedtest oder Probe.
+ * Halte einer Fahrt laut ICE-Portal-Fahrplan. Wird von der CLI komplett ersetzt, sobald sich
+ * Zeiten/Gleise ändern (PUT /api/trips/:id/stops); so bleibt je Fahrt der letzte Stand mit
+ * Ist-Zeiten und damit die Verspätungsentwicklung erhalten.
+ */
+export const tripStops = pgTable(
+  'trip_stops',
+  {
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    seq: smallint('seq').notNull(),
+    evaNr: text('eva_nr'),
+    name: text('name').notNull(),
+    lat: doublePrecision('lat'),
+    lon: doublePrecision('lon'),
+    scheduledArrival: timestamp('scheduled_arrival', { withTimezone: true }),
+    actualArrival: timestamp('actual_arrival', { withTimezone: true }),
+    scheduledDeparture: timestamp('scheduled_departure', { withTimezone: true }),
+    actualDeparture: timestamp('actual_departure', { withTimezone: true }),
+    trackScheduled: text('track_scheduled'),
+    trackActual: text('track_actual'),
+    passed: boolean('passed'),
+    positionStatus: text('position_status'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tripId, t.seq] })],
+);
+
+/**
+ * Messwerte. Eine Zeile je Ping-Fenster (WINDOW_MS), Speedtest oder Probe.
  * Für die Testversion unpartitioniert; in Produktion monatlich nach ts partitionieren.
  */
 export const samples = pgTable(
@@ -138,6 +177,11 @@ export const samples = pgTable(
     effectiveType: text('effective_type'),
     /** Konnektivitätsstatus laut ICE-Portal (HIGH, MIDDLE, LOW, UNSTABLE, NO_INFO), nur App/CLI */
     iceState: text('ice_state'),
+    /** Prognose des Portals: nächster Status und Sekunden bis dahin */
+    iceNextState: text('ice_next_state'),
+    iceRemainingS: integer('ice_remaining_s'),
+    /** Separater Internet-Indikator des Portals (z.B. HIGH, OFFLINE) */
+    iceInternet: text('ice_internet'),
     /** Positionsquelle: gps, iceportal, none */
     posSource: text('pos_source'),
     /** z.B. off_rail, implausible_speed, bad_accuracy, out_of_bbox, net_sig_invalid */

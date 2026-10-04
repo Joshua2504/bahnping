@@ -39,6 +39,8 @@ func main() {
 		err = cmdTrack(args)
 	case "diag":
 		err = cmdDiag(args)
+	case "update":
+		err = cmdUpdate(args)
 	case "version", "-v", "--version":
 		fmt.Printf("bahnping %s\n", version)
 	case "help", "-h", "--help":
@@ -63,6 +65,7 @@ Verwendung:
   bahnping diag                 ICE-Portal und Zug-WLAN-Endpunkte prüfen (Diagnose)
   bahnping whoami                Konto- und Netzinformationen anzeigen
   bahnping track [optionen]      Fahrt starten und messen
+  bahnping update [server-url]   Auf die aktuelle Version vom Server aktualisieren
   bahnping version               Version anzeigen
 
 Optionen für "track":

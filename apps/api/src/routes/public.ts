@@ -188,6 +188,8 @@ export function registerPublicRoutes(app: FastifyInstance): void {
         speed_mps: number | null;
         pos_age_ms: number;
         ice_state: string | null;
+        next_stop: string | null;
+        delay_min: number | null;
       }[]
     >`
       SELECT
@@ -198,7 +200,9 @@ export function registerPublicRoutes(app: FastifyInstance): void {
         lp.lon,
         lp.speed_mps,
         (1000 * extract(epoch FROM (now() - lp.ts)))::int AS pos_age_ms,
-        li.ice_state
+        li.ice_state,
+        ns.name AS next_stop,
+        ns.delay_min
       FROM (
         SELECT t.id AS trip_id, t.train_type, t.train_number
         FROM trips t
@@ -220,6 +224,15 @@ export function registerPublicRoutes(app: FastifyInstance): void {
         ORDER BY s.ts DESC
         LIMIT 1
       ) li ON true
+      LEFT JOIN LATERAL (
+        SELECT st.name,
+          (CASE WHEN st.scheduled_arrival IS NOT NULL AND st.actual_arrival IS NOT NULL
+            THEN round(extract(epoch FROM (st.actual_arrival - st.scheduled_arrival)) / 60)::int END) AS delay_min
+        FROM trip_stops st
+        WHERE st.trip_id = lt.trip_id AND (st.passed IS NOT TRUE)
+        ORDER BY st.seq
+        LIMIT 1
+      ) ns ON true
     `;
 
     let trains: ReturnType<typeof summarizeLiveTrains> = [];
@@ -249,6 +262,8 @@ export function registerPublicRoutes(app: FastifyInstance): void {
         speedMps: r.speed_mps,
         posAgeMs: Number(r.pos_age_ms),
         iceState: r.ice_state,
+        nextStop: r.next_stop,
+        delayMin: r.delay_min === null ? null : Number(r.delay_min),
         pings: pingsByTrip.get(r.trip_id) ?? [],
       }));
 

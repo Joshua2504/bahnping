@@ -175,6 +175,12 @@ func (c *Client) PatchTrip(ctx context.Context, id string, body model.TripUpdate
 	return &trip, nil
 }
 
+// PutStops ruft PUT /api/trips/:id/stops ab (Halteliste komplett ersetzen). Ältere Server
+// ohne diese Route antworten 404, siehe IsNotFound.
+func (c *Client) PutStops(ctx context.Context, id string, body model.TripStopsPut) error {
+	return c.doJSON(ctx, http.MethodPut, "/api/trips/"+url.PathEscape(id)+"/stops", body, nil)
+}
+
 // EndTrip ruft POST /api/trips/:id/end ab.
 func (c *Client) EndTrip(ctx context.Context, id string, body model.TripEnd) (*model.Trip, error) {
 	var trip model.Trip

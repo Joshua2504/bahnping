@@ -102,8 +102,22 @@ func Render(w io.Writer, s Snapshot, first bool) {
 		state := iceStateLabel(s.IceState)
 		next := orDash(s.NextStopName)
 		delay := fmtIntPtr(s.NextStopDelayMin, " min")
-		line("ICE-Portal verfügbar  Geschwindigkeit %s  Netzprognose %s", speed, state)
-		line("Nächster Halt %s  Verspätung %s", next, delay)
+		forecast := ""
+		if s.IceNextState != "" {
+			forecast = "  → " + iceStateLabel(s.IceNextState)
+			if s.IceRemainingS != nil {
+				forecast += fmt.Sprintf(" in %d:%02d", *s.IceRemainingS/60, *s.IceRemainingS%60)
+			}
+		}
+		unit := ""
+		if s.IceTzn != "" {
+			unit = "  Triebzug " + s.IceTzn
+			if s.IceSeries != "" {
+				unit += " (BR " + s.IceSeries + ")"
+			}
+		}
+		line("ICE-Portal verfügbar  Geschwindigkeit %s  Netzstatus %s%s", speed, state, forecast)
+		line("Nächster Halt %s  Verspätung %s%s", next, delay, unit)
 	} else {
 		if s.IcePortalError != "" {
 			line("ICE-Portal nicht verfügbar: %s", s.IcePortalError)

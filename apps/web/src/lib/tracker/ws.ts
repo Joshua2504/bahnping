@@ -6,7 +6,7 @@ export type WsConnectionState = 'connecting' | 'open' | 'closed';
 
 export interface WsCallbacks {
 	onStateChange?: (state: WsConnectionState) => void;
-	onRtt?: (rttMs: number) => void;
+	onRtt?: (rttMs: number, seq: number) => void;
 	/** Median-Offset aus 3 Zeit-Sync-Antworten (ms, Server minus Client). */
 	onClockOffset?: (offsetMs: number) => void;
 }
@@ -85,7 +85,7 @@ export class TrackerSocket {
 				this.send({ t: 'pong', seq: msg.seq });
 				break;
 			case 'rtt':
-				this.callbacks.onRtt?.(msg.rttMs);
+				this.callbacks.onRtt?.(msg.rttMs, msg.seq);
 				break;
 			case 'sync': {
 				const t3 = Date.now();

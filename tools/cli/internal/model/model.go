@@ -87,6 +87,28 @@ type Trip struct {
 	SampleCount *int    `json:"sampleCount,omitempty"`
 }
 
+// TripStop entspricht TripStop in schemas.ts (Zeiten als ISO-8601/RFC3339).
+type TripStop struct {
+	Seq                int      `json:"seq"`
+	EvaNr              *string  `json:"evaNr"`
+	Name               string   `json:"name"`
+	Lat                *float64 `json:"lat"`
+	Lon                *float64 `json:"lon"`
+	ScheduledArrival   *string  `json:"scheduledArrival"`
+	ActualArrival      *string  `json:"actualArrival"`
+	ScheduledDeparture *string  `json:"scheduledDeparture"`
+	ActualDeparture    *string  `json:"actualDeparture"`
+	TrackScheduled     *string  `json:"trackScheduled"`
+	TrackActual        *string  `json:"trackActual"`
+	Passed             *bool    `json:"passed"`
+	PositionStatus     *string  `json:"positionStatus"`
+}
+
+// TripStopsPut entspricht TripStopsPut in schemas.ts (PUT /api/trips/:id/stops).
+type TripStopsPut struct {
+	Stops []TripStop `json:"stops"`
+}
+
 // TripCreate entspricht TripCreate in schemas.ts.
 type TripCreate struct {
 	TrainType     TrainType `json:"trainType"`
@@ -105,8 +127,13 @@ type TripEnd struct {
 // Die Route existiert serverseitig evtl. noch nicht (Stand dieser Implementierung);
 // die CLI behandelt 404 defensiv (siehe apiclient.Client.PatchTrip).
 type TripUpdate struct {
-	TrainType   *TrainType `json:"trainType,omitempty"`
-	TrainNumber *string    `json:"trainNumber,omitempty"`
+	TrainType       *TrainType `json:"trainType,omitempty"`
+	TrainNumber     *string    `json:"trainNumber,omitempty"`
+	IceTzn          *string    `json:"iceTzn,omitempty"`
+	IceSeries       *string    `json:"iceSeries,omitempty"`
+	TripDate        *string    `json:"tripDate,omitempty"`
+	OriginName      *string    `json:"originName,omitempty"`
+	DestinationName *string    `json:"destinationName,omitempty"`
 }
 
 // SampleBatch entspricht SampleBatch in schemas.ts.
@@ -137,8 +164,13 @@ type Sample struct {
 	ConnType  *string   `json:"connType,omitempty"`
 	EffType   *string   `json:"effectiveType,omitempty"`
 	IceState  *string   `json:"iceState,omitempty"`
-	PosSource string    `json:"posSource,omitempty"`
-	Kind      string    `json:"kind"`
+	// Prognose des ICE-Portals (connectivity.nextState/remainingTimeSeconds) und dessen
+	// separater Internet-Indikator (z.B. HIGH, OFFLINE).
+	IceNextState  *string `json:"iceNextState,omitempty"`
+	IceRemainingS *int64  `json:"iceRemainingS,omitempty"`
+	IceInternet   *string `json:"iceInternet,omitempty"`
+	PosSource     string  `json:"posSource,omitempty"`
+	Kind          string  `json:"kind"`
 
 	// ping_window
 	N         int      `json:"n,omitempty"`

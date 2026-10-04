@@ -40,6 +40,11 @@ const SampleBase = z.object({
   effectiveType: z.string().max(10).nullable().optional(),
   /** Konnektivitätsstatus laut ICE-Portal (HIGH, MIDDLE, LOW, UNSTABLE, NO_INFO), nur App/CLI */
   iceState: z.string().max(20).nullable().optional(),
+  /** Vom ICE-Portal vorhergesagter nächster Status (connectivity.nextState) und Sekunden bis dahin. */
+  iceNextState: z.string().max(20).nullable().optional(),
+  iceRemainingS: z.number().int().min(0).max(86_400).nullable().optional(),
+  /** Separater Internet-Indikator des Portals (z.B. HIGH, OFFLINE), nicht identisch mit iceState. */
+  iceInternet: z.string().max(20).nullable().optional(),
   /** Positionsquelle: gps (Gerät), iceportal, none */
   posSource: z.enum(['gps', 'iceportal', 'none']).optional(),
 });
@@ -101,6 +106,14 @@ export const Trip = z.object({
   endedAt: z.string().nullable(),
   status: z.enum(['active', 'ended', 'flagged']),
   sampleCount: z.number().int().optional(),
+  /** Triebzugnummer laut ICE-Portal (physische Einheit, z.B. "ICE9012"); nur CLI. */
+  iceTzn: z.string().nullable().optional(),
+  /** Baureihe laut ICE-Portal (z.B. "412" = ICE 4). */
+  iceSeries: z.string().nullable().optional(),
+  /** Fahrplantag (YYYY-MM-DD), Start- und Zielbahnhof laut ICE-Portal. */
+  tripDate: z.string().nullable().optional(),
+  originName: z.string().nullable().optional(),
+  destinationName: z.string().nullable().optional(),
 });
 export type Trip = z.infer<typeof Trip>;
 
@@ -110,8 +123,38 @@ export const TripEnd = z.object({ clockOffsetMs: z.number().int().optional() });
 export const TripUpdate = z.object({
   trainType: TrainType.optional(),
   trainNumber: z.string().trim().max(20).nullable().optional(),
+  iceTzn: z.string().trim().max(20).nullable().optional(),
+  iceSeries: z.string().trim().max(10).nullable().optional(),
+  tripDate: z.string().trim().max(10).nullable().optional(),
+  originName: z.string().trim().max(120).nullable().optional(),
+  destinationName: z.string().trim().max(120).nullable().optional(),
 });
 export type TripUpdate = z.infer<typeof TripUpdate>;
+
+/**
+ * Ein Halt laut ICE-Portal-Fahrplan. Die CLI sendet die komplette Liste per
+ * `PUT /api/trips/:id/stops` (ersetzt den vorherigen Stand), sobald sich etwas ändert.
+ * Zeiten als ISO-8601.
+ */
+export const TripStop = z.object({
+  seq: z.number().int().min(0).max(200),
+  evaNr: z.string().max(20).nullable(),
+  name: z.string().min(1).max(120),
+  lat: z.number().min(-90).max(90).nullable(),
+  lon: z.number().min(-180).max(180).nullable(),
+  scheduledArrival: z.string().nullable(),
+  actualArrival: z.string().nullable(),
+  scheduledDeparture: z.string().nullable(),
+  actualDeparture: z.string().nullable(),
+  trackScheduled: z.string().max(10).nullable(),
+  trackActual: z.string().max(10).nullable(),
+  passed: z.boolean().nullable(),
+  /** z.B. departed, future, passed (Freitext des Portals) */
+  positionStatus: z.string().max(20).nullable(),
+});
+export type TripStop = z.infer<typeof TripStop>;
+export const TripStopsPut = z.object({ stops: z.array(TripStop).max(200) });
+export type TripStopsPut = z.infer<typeof TripStopsPut>;
 
 // ---------- Auth / Konto ----------
 
@@ -242,6 +285,9 @@ export const LiveTrain = z.object({
   /** Alter des letzten Positions-Samples in Sekunden, gerundet auf 10s. */
   lastSeenSec: z.number().int().nonnegative(),
   iceState: z.string().nullable(),
+  /** Nächster Halt und Verspätung dort (Minuten) laut ICE-Portal, falls bekannt. */
+  nextStop: z.string().nullable().optional(),
+  delayMin: z.number().int().nullable().optional(),
 });
 export type LiveTrain = z.infer<typeof LiveTrain>;
 
@@ -380,6 +426,9 @@ export const TripSample = z.object({
   asn: z.number().int().nullable(),
   netClass: NetClass,
   iceState: z.string().nullable().optional(),
+  iceNextState: z.string().nullable().optional(),
+  iceRemainingS: z.number().int().nullable().optional(),
+  iceInternet: z.string().nullable().optional(),
   posSource: z.string().nullable().optional(),
   flags: z.array(z.string()),
 });
@@ -397,6 +446,8 @@ export const TripSamples = z.object({
   trip: Trip,
   samples: z.array(TripSample),
   asns: z.array(TripSamplesAsn),
+  /** Halte laut ICE-Portal (nur bei CLI-Fahrten befüllt), nach `seq` sortiert. */
+  stops: z.array(TripStop).optional(),
   /** Serverzeit (ISO) beim Erstellen der Antwort, als Basis für den nächsten `?since=`-Request. */
   serverTime: z.string(),
 });

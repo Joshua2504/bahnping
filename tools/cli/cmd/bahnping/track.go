@@ -125,8 +125,8 @@ func cmdTrack(args []string) error {
 	rttRing := stats.NewRttRing(5)
 	aggregator := &stats.Aggregator{}
 
-	onRtt := func(_ int, rttMs float64) {
-		aggregator.AddRtt(rttMs)
+	onRtt := func(seq int, rttMs float64) {
+		aggregator.AddRtt(seq, rttMs)
 		rttRing.Add(rttMs)
 		state.AddRtt(rttMs)
 	}
@@ -196,6 +196,8 @@ func cmdTrack(args []string) error {
 	go func() { defer wg.Done(); sess.uploadLoop() }()
 	wg.Add(1)
 	go func() { defer wg.Done(); sess.icePortalDisplayLoop() }()
+	wg.Add(1)
+	go func() { defer wg.Done(); sess.tripMetaSyncLoop() }()
 	if flags.speedtestEvery > 0 {
 		wg.Add(1)
 		go func() { defer wg.Done(); sess.autoSpeedtestLoop(flags.speedtestEvery) }()
