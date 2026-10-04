@@ -73,7 +73,8 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
     `implausible_speed` (Distanz/Zeit zum letzten Sample der Fahrt > MAX_SPEED_MPS), `clock_skew`
     (korrigierte ts weicht > 24 h von Serverzeit ab). Rejected nur bei Schemafehlern einzelner Samples.
   - aktualisiert `trips.last_sample_at`.
-- `GET /api/trips/:id/samples?since=<ISO>` → `200 TripSamples` (nur eigene, sonst 404):
+- `GET /api/trips/:id/samples?since=<ISO>` → `200 TripSamples` (öffentlich ohne Auth, Zugriff über die
+  nicht erratbare Fahrt-ID; unbekannte/ungültige ID → 404):
   `{ trip, samples, asns, serverTime }`. `samples` enthält alle Samples der Fahrt in zeitlicher
   Reihenfolge (reduzierte Felder, siehe Schema `TripSample`), `asns` die je ASN gesehenen Samples
   (`asn`, `name`, `netClass`, `samples`, stets über die gesamte Fahrt, unabhängig von `since`).

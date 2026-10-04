@@ -22,6 +22,8 @@ import { verifyNetToken } from '../lib/netToken.js';
 import { isBadAccuracy, isClockSkew, isImplausibleSpeed, isOutOfBbox, type LastPosition } from '../lib/flags.js';
 import { normalizeTrainNumber } from '../lib/trainNumber.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toTrip(row: typeof trips.$inferSelect, sampleCount?: number): Trip {
   return {
     id: row.id,
@@ -176,15 +178,17 @@ export function registerTripRoutes(app: FastifyInstance): void {
     reply.send(toTrip(updated));
   });
 
-  app.get('/api/trips/:id/samples', { preHandler: app.requireAuth }, async (request, reply) => {
+  // Öffentlich: Wer die (nicht erratbare) Fahrt-ID kennt, kann die Fahrt ansehen (Teilen per Link).
+  // Die Antwort enthält keine Nutzerdaten.
+  app.get('/api/trips/:id/samples', async (request, reply) => {
     const { id: tripId } = request.params as { id: string };
+    if (!UUID_RE.test(tripId)) {
+      sendProblem(reply, 404, 'Fahrt nicht gefunden');
+      return;
+    }
     const query = parseOrProblem(TripSamplesQuery, request.query, reply);
     if (!query) return;
-    const tripRows = await db
-      .select()
-      .from(trips)
-      .where(and(eq(trips.id, tripId), eq(trips.userId, request.userId!)))
-      .limit(1);
+    const tripRows = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
     const trip = tripRows[0];
     if (!trip) {
       sendProblem(reply, 404, 'Fahrt nicht gefunden');
