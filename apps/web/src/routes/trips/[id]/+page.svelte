@@ -3,18 +3,19 @@
 	// Zeitverlauf (RTT/Verlust). Nutzt dieselbe Basemap wie `/map` (siehe #lib/map/basemap.js).
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/state';
-	import maplibregl, { type ExpressionSpecification } from 'maplibre-gl';
+	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import uPlot from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { NET_CLASS_LABELS, TRAIN_TYPE_LABELS, type TripSample, type TripSamples } from '@bahn/shared';
-	import { ApiError, api } from '#lib/api.js';
+	import { NET_CLASS_LABELS, TRAIN_TYPE_LABELS } from '@bahn/shared';
+	import { ApiError, api, type TripSampleExt, type TripSamplesExt } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
+	import { rttColorExpression } from '#lib/map/colors.js';
 	import { median, percentile } from '#lib/tracker/util.js';
 
 	const tripId = page.params.id as string;
 
-	let data = $state<TripSamples | null>(null);
+	let data = $state<TripSamplesExt | null>(null);
 	let loadError = $state<string | null>(null);
 	let flagsOpen = $state(false);
 
@@ -24,7 +25,7 @@
 	let popup: maplibregl.Popup | null = null;
 	let chart: uPlot | null = null;
 
-	const RTT_COLOR: ExpressionSpecification = ['step', ['get', 'rtt'], '#22c55e', 80, '#eab308', 200, '#f97316', 500, '#ef4444'];
+	const RTT_COLOR = rttColorExpression('rtt');
 
 	async function load(): Promise<void> {
 		try {
@@ -50,7 +51,7 @@
 		return `${Math.floor(min / 60)} h ${min % 60} min`;
 	}
 
-	const pingSamples = $derived((data?.samples ?? []).filter((s): s is TripSample => s.kind === 'ping_window'));
+	const pingSamples = $derived((data?.samples ?? []).filter((s): s is TripSampleExt => s.kind === 'ping_window'));
 	const speedtestSamples = $derived((data?.samples ?? []).filter((s) => s.kind === 'speedtest'));
 	const flaggedSamples = $derived((data?.samples ?? []).filter((s) => s.flags.length > 0));
 
@@ -69,6 +70,23 @@
 	});
 
 	const totalAsnSamples = $derived((data?.asns ?? []).reduce((a, r) => a + r.samples, 0));
+
+	/** Zeitlicher Verlauf des ICE-Portal-Konnektivitätsstatus (nur Wechsel, nicht jedes Sample). */
+	const iceStateChanges = $derived.by(() => {
+		const out: { state: string; at: string }[] = [];
+		for (const s of data?.samples ?? []) {
+			if (!s.iceState) continue;
+			if (out.length === 0 || out[out.length - 1].state !== s.iceState) out.push({ state: s.iceState, at: s.ts });
+		}
+		return out;
+	});
+	const ICE_STATE_LABELS: Record<string, string> = {
+		HIGH: 'gut',
+		MIDDLE: 'mittel',
+		LOW: 'schwach',
+		UNSTABLE: 'instabil',
+		NO_INFO: 'keine Info',
+	};
 
 	function pointGeoJson() {
 		const samples = (data?.samples ?? []).filter((s) => s.lat !== null && s.lon !== null);
@@ -311,6 +329,20 @@
 			</table>
 		{/if}
 	</div>
+
+	{#if iceStateChanges.length > 0}
+		<div class="card">
+			<h2>ICE-Portal-Status</h2>
+			<ul style="margin: 0.4rem 0 0; padding-left: 1.2rem">
+				{#each iceStateChanges as change (change.at)}
+					<li>
+						{ICE_STATE_LABELS[change.state] ?? change.state}
+						– seit {new Date(change.at).toLocaleTimeString('de-DE')}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 
 	<div class="card" style="padding: 0; overflow: hidden">
 		<div bind:this={mapContainer} style="width: 100%; height: 60vh; min-height: 320px"></div>

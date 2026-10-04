@@ -18,6 +18,8 @@ import { registerWsRoutes } from './routes/ws.js';
 import { registerSpeedRoutes } from './routes/speed.js';
 import { registerPublicRoutes } from './routes/public.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerTokenRoutes } from './routes/tokens.js';
+import { registerDownloadRoutes } from './routes/downloads.js';
 import { registerStaticRoutes } from './routes/static.js';
 
 const MUTATING_METHODS = new Set(['POST', 'PATCH', 'DELETE', 'PUT']);
@@ -70,7 +72,10 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
         if (row) {
           request.userId = row.userId;
           request.authMethod = 'token';
-          void ctx.db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.tokenHash, hash));
+          const now = Date.now();
+          if (!row.lastUsedAt || now - row.lastUsedAt.getTime() > LAST_SEEN_UPDATE_INTERVAL_MS) {
+            void ctx.db.update(apiTokens).set({ lastUsedAt: new Date(now) }).where(eq(apiTokens.tokenHash, hash));
+          }
           return;
         }
       }
@@ -118,6 +123,20 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
     }
   });
 
+  // Token-Verwaltung und Kontolöschung dürfen nicht per API-Token selbst ausgeführt werden
+  // (sonst könnte ein gestohlenes Token sich selbst verlängern/weitere Tokens anlegen oder das Konto löschen).
+  app.decorate('requireCookieAuth', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.userId) {
+      sendProblem(reply, 401, 'Nicht angemeldet');
+      return;
+    }
+    if (request.authMethod !== 'cookie') {
+      sendProblem(reply, 403, 'Nur mit Sitzungs-Login möglich', {
+        detail: 'Diese Aktion ist mit einem API-Token nicht erlaubt.',
+      });
+    }
+  });
+
   app.decorate('requireAdmin', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.userId) {
       sendProblem(reply, 401, 'Nicht angemeldet');
@@ -149,6 +168,8 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   registerSpeedRoutes(app);
   registerPublicRoutes(app);
   registerAdminRoutes(app);
+  registerTokenRoutes(app);
+  registerDownloadRoutes(app, path.resolve(import.meta.dirname, '..'));
   registerStaticRoutes(app, path.resolve(import.meta.dirname, '..'));
 
   return app;

@@ -16,6 +16,7 @@
 		{ href: '/', label: 'Start' },
 		{ href: '/track', label: 'Fahrt' },
 		{ href: '/map', label: 'Karte' },
+		{ href: '/stats', label: 'Statistik' },
 		{ href: '/account', label: 'Konto' },
 		...(auth.me?.role === 'admin' ? [{ href: '/admin', label: 'Admin' }] : []),
 	]);

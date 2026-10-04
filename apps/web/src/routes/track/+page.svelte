@@ -3,6 +3,7 @@
 	// während der Fahrt Vollbild-Dark-Layout mit Live-Zahlen (siehe PLANUNG.md 6.9).
 	import { TRAIN_TYPE_LABELS, TRAIN_TYPES, type TrainType } from '@bahn/shared';
 	import Sparkline from '#lib/components/Sparkline.svelte';
+	import TrackMap from '#lib/components/TrackMap.svelte';
 	import { auth } from '#lib/auth.svelte.js';
 	import { tracker } from '#lib/tracker/tracker.svelte.js';
 
@@ -102,6 +103,8 @@
 			<div class="stat__label">RTT (letzte 5 min)</div>
 			<Sparkline points={tracker.rttHistory} />
 		</div>
+
+		<TrackMap />
 
 		<div class="track-stats">
 			<div class="stat">

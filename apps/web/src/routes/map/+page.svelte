@@ -5,6 +5,7 @@
 	import maplibregl, { type ExpressionSpecification } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
+	import { RTT_LEGEND, rttColorExpression } from '#lib/map/colors.js';
 	import {
 		METRICS,
 		NET_CLASSES,
@@ -33,12 +34,7 @@
 	};
 
 	const LEGEND: Record<Metric, { color: string; label: string }[]> = {
-		rtt: [
-			{ color: '#22c55e', label: '< 80 ms' },
-			{ color: '#eab308', label: '< 200 ms' },
-			{ color: '#f97316', label: '< 500 ms' },
-			{ color: '#ef4444', label: '≥ 500 ms' },
-		],
+		rtt: RTT_LEGEND,
 		loss: [
 			{ color: '#22c55e', label: '< 1 %' },
 			{ color: '#eab308', label: '< 5 %' },
@@ -99,7 +95,7 @@
 	function colorExpression(): ExpressionSpecification {
 		switch (metric) {
 			case 'rtt':
-				return ['step', ['get', 'value'], '#22c55e', 80, '#eab308', 200, '#f97316', 500, '#ef4444'];
+				return rttColorExpression('value');
 			case 'loss':
 				return ['step', ['get', 'value'], '#22c55e', 1, '#eab308', 5, '#f97316', 15, '#ef4444'];
 			case 'avail':

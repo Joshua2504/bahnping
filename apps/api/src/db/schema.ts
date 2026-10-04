@@ -129,6 +129,10 @@ export const samples = pgTable(
     ipVersion: smallint('ip_version'),
     connType: text('conn_type'),
     effectiveType: text('effective_type'),
+    /** Konnektivitätsstatus laut ICE-Portal (HIGH, MIDDLE, LOW, UNSTABLE, NO_INFO), nur App/CLI */
+    iceState: text('ice_state'),
+    /** Positionsquelle: gps, iceportal, none */
+    posSource: text('pos_source'),
     /** z.B. off_rail, implausible_speed, bad_accuracy, out_of_bbox, net_sig_invalid */
     flags: text('flags').array().notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

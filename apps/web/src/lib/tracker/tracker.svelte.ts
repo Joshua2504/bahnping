@@ -8,7 +8,7 @@ import {
 	type SpeedtestSample,
 	type TrainType,
 } from '@bahn/shared';
-import { api, ApiError } from '../api.js';
+import { api, ApiError, type TripSampleExt } from '../api.js';
 import { GeoTracker, type GeoState } from './geo.js';
 import { NetWhoami } from './net.js';
 import { Outbox, type OutboxStatus } from './outbox.js';
@@ -63,6 +63,44 @@ interface SpeedtestEntry {
 	at: number;
 }
 
+/** Reduziertes Sample für die Live-Karte im Fahrt-Modus (siehe `lib/components/TrackMap.svelte`). */
+export interface LiveTripSample {
+	id: string;
+	ts: number;
+	lat: number | null;
+	lon: number | null;
+	kind: Sample['kind'];
+	rttMedian: number | null;
+	n: number | null;
+	lost: number | null;
+}
+
+function liveSampleFromClient(s: Sample): LiveTripSample {
+	return {
+		id: s.id,
+		ts: s.ts,
+		lat: s.lat,
+		lon: s.lon,
+		kind: s.kind,
+		rttMedian: s.kind === 'ping_window' ? s.rttMedian : null,
+		n: s.kind === 'ping_window' ? s.n : null,
+		lost: s.kind === 'ping_window' ? s.lost : null,
+	};
+}
+
+function liveSampleFromServer(s: TripSampleExt): LiveTripSample {
+	return {
+		id: s.id,
+		ts: new Date(s.ts).getTime(),
+		lat: s.lat,
+		lon: s.lon,
+		kind: s.kind,
+		rttMedian: s.rttMedian,
+		n: s.n,
+		lost: s.lost,
+	};
+}
+
 const EMPTY_GEO: GeoState = {
 	lat: null,
 	lon: null,
@@ -108,6 +146,9 @@ class Tracker {
 	errors = $state<string[]>([]);
 	resumeAvailable = $state(false);
 
+	/** Alle Samples der laufenden Fahrt (nur im RAM), für die Live-Karte im Fahrt-Modus. */
+	tripSamples = $state<LiveTripSample[]>([]);
+
 	private socket: TrackerSocket | null = null;
 	private windowAgg: PingWindowAggregator | null = null;
 	private geoTracker: GeoTracker | null = null;
@@ -150,6 +191,22 @@ class Tracker {
 		this.clockOffsetMs = null;
 		await this.connectSocketAndSync();
 		this.beginLocalState(stored);
+		void this.loadResumedSamples(stored.tripId);
+	}
+
+	/** Nach „Fahrt fortsetzen“ (z.B. nach Reload) die Live-Karte aus Server + Outbox-Resten befüllen. */
+	private async loadResumedSamples(tripId: string): Promise<void> {
+		const pending = await this.outbox.getPendingSamples(tripId);
+		const byId = new Map<string, LiveTripSample>();
+		for (const s of pending) byId.set(s.id, liveSampleFromClient(s));
+		try {
+			const serverData = await api.getTripSamples(tripId);
+			for (const s of serverData.samples) byId.set(s.id, liveSampleFromServer(s));
+		} catch {
+			// Offline: wenigstens die Outbox-Reste anzeigen.
+		}
+		if (this.tripId !== tripId) return;
+		this.tripSamples = [...byId.values()].sort((a, b) => a.ts - b.ts);
 	}
 
 	discardResume(): void {
@@ -271,6 +328,7 @@ class Tracker {
 		this.errors = [];
 		this.netHistory = [];
 		this.lastEndedTripId = null;
+		this.tripSamples = [];
 		this.writeStorage({ ...stored, clockOffsetMs });
 
 		this.windowAgg = new PingWindowAggregator((w) => this.handleWindow(w));
@@ -374,6 +432,7 @@ class Tracker {
 
 	private async pushSample(sample: Sample): Promise<void> {
 		if (!this.tripId) return;
+		this.tripSamples = [...this.tripSamples, liveSampleFromClient(sample)];
 		await this.outbox.add(this.tripId, sample);
 	}
 }

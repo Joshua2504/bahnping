@@ -2,7 +2,7 @@ import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { latLngToCell } from 'h3-js';
-import { Sample, TripCreate, TripEnd, type NetClass, type Trip, type TripSample, type TripSamples } from '@bahn/shared';
+import { Sample, TripCreate, TripEnd, TripUpdate, type NetClass, type Trip, type TripSample, type TripSamples } from '@bahn/shared';
 import { asnCatalog, samples, trips } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
@@ -73,6 +73,27 @@ export function registerTripRoutes(app: FastifyInstance): void {
     reply.send(toTrip(row.trip, Number(row.sampleCount)));
   });
 
+  // Nachträgliche Korrektur (z.B. Zugnummer erst aus dem ICE-Portal bekannt); auch per Bearer-Token nutzbar.
+  app.patch('/api/trips/:id', { preHandler: app.requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = parseOrProblem(TripUpdate, request.body, reply);
+    if (!body) return;
+    const existing = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, id), eq(trips.userId, request.userId!)))
+      .limit(1);
+    if (!existing[0]) {
+      sendProblem(reply, 404, 'Fahrt nicht gefunden');
+      return;
+    }
+    const patch: Partial<typeof trips.$inferInsert> = {};
+    if (body.trainType !== undefined) patch.trainType = body.trainType;
+    if (body.trainNumber !== undefined) patch.trainNumber = body.trainNumber;
+    const updated = Object.keys(patch).length > 0 ? await db.update(trips).set(patch).where(eq(trips.id, id)).returning() : existing;
+    reply.send(toTrip(updated[0]));
+  });
+
   app.get('/api/trips/:id/samples', { preHandler: app.requireAuth }, async (request, reply) => {
     const { id: tripId } = request.params as { id: string };
     const tripRows = await db
@@ -92,7 +113,9 @@ export function registerTripRoutes(app: FastifyInstance): void {
       .where(eq(samples.tripId, tripId))
       .orderBy(asc(samples.ts));
 
-    const tripSamples: TripSample[] = sampleRows.map((s) => ({
+    // Zusätzlich zu TripSample (packages/shared) liefern wir iceState/posSource als lose Erweiterung
+    // mit aus (das Schema selbst bleibt unverändert, siehe apps/web TripSampleExt).
+    const tripSamples: (TripSample & { iceState: string | null; posSource: string | null })[] = sampleRows.map((s) => ({
       id: s.id,
       ts: s.ts.toISOString(),
       kind: s.kind as TripSample['kind'],
@@ -114,6 +137,8 @@ export function registerTripRoutes(app: FastifyInstance): void {
       asn: s.asn,
       netClass: s.netClass as NetClass,
       flags: s.flags,
+      iceState: s.iceState,
+      posSource: s.posSource,
     }));
 
     const asnStats = await db
@@ -283,6 +308,8 @@ export function registerTripRoutes(app: FastifyInstance): void {
         ipVersion,
         connType: s.connType ?? null,
         effectiveType: s.effectiveType ?? null,
+        iceState: s.iceState ?? null,
+        posSource: s.posSource ?? null,
         flags,
         n: s.kind === 'ping_window' ? s.n : null,
         lost: s.kind === 'ping_window' ? s.lost : null,

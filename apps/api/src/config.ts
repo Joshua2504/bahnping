@@ -32,6 +32,8 @@ const Env = z.object({
   NETCLASS_OVERRIDES: z.string().default(''),
   WEB_DIST: z.string().optional(),
   TILES_DIR: z.string().optional(),
+  /** Verzeichnis mit den CLI-Binaries, ausgeliefert unter `/dl/<dateiname>`, relativ zu apps/api. */
+  DOWNLOADS_DIR: z.string().default('../../.run/dist'),
   /** Kommagetrennte E-Mail-Adressen, die beim Login/`/api/me` automatisch Admin-Rolle erhalten. */
   ADMIN_EMAILS: z.string().default(''),
 });

@@ -11,7 +11,7 @@ import WebSocket from 'ws';
  */
 export function registerStaticRoutes(app: FastifyInstance, apiRoot: string): void {
   const { cfg } = app.ctx;
-  const reservedPrefixes = ['/api', '/ws', '/mailpit', '/tiles'];
+  const reservedPrefixes = ['/api', '/ws', '/mailpit', '/tiles', '/dl'];
 
   let webDist: string | undefined;
   if (cfg.WEB_DIST) {

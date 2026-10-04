@@ -28,5 +28,6 @@ declare module 'fastify' {
     ctx: AppContext;
     requireAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireAdmin: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireCookieAuth: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

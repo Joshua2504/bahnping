@@ -22,8 +22,25 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
   `ADMIN_EMAILS` steht (ebenso bei `POST /api/auth/confirm`); die Rolle wird nie automatisch
   wieder entfernt.
 - `PATCH /api/me` Body `MeUpdate` (ALTCHA Pflicht) → `200 Me`; Name bereits vergeben → `409`.
-- `DELETE /api/me` → `204`, löscht Nutzer samt Fahrten/Samples (Cascade).
+- `DELETE /api/me` → `204`, löscht Nutzer samt Fahrten/Samples (Cascade). Nur mit Sitzungs-Login,
+  nicht mit API-Token (`403`).
 - `GET /api/me/export` → JSON `{ user, trips: [{...trip, samples: [...] }] }`.
+
+## API-Tokens (CLI/App)
+
+Für die CLI (`tools/cli`) und andere nicht-browserbasierte Clients: `Authorization: Bearer <token>`
+statt Session-Cookie. Token-Format `bnt_` + 32 Byte base64url; gespeichert wird nur der SHA-256-Hash
+(`api_tokens.token_hash`). `lastUsedAt` wird höchstens alle 10 Minuten aktualisiert. Widerrufene
+Tokens (`revoked_at` gesetzt) werden vom Auth-Hook nicht mehr akzeptiert.
+
+Token-Verwaltung und Kontolöschung sind **nur mit Sitzungs-Login** möglich, nie mit einem
+Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst selbst verlängern.
+
+- `GET /api/tokens` → `200 ApiTokenInfo[]` (eigene, nicht widerrufene). `id` = die ersten 12 Zeichen
+  des `token_hash` (hex), dient nur als öffentliche Kennung für `DELETE`.
+- `POST /api/tokens` Body `ApiTokenCreate` (ALTCHA Pflicht) → `201 ApiTokenCreated` (enthält `token`
+  im Klartext, wird danach nie wieder ausgegeben). Maximal 20 aktive Tokens je Nutzer, sonst `400`.
+- `DELETE /api/tokens/:id` → `204` (setzt `revoked_at`), `404` falls unbekannt/fremd/bereits widerrufen.
 
 ## Fahrten / Messwerte (Auth Pflicht)
 - `POST /api/trips` Body `TripCreate` → `201 Trip`. Es darf nur eine aktive Fahrt je Nutzer geben; eine
@@ -31,9 +48,13 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
 - `GET /api/trips` → `200 Trip[]` (eigene, neueste zuerst, mit `sampleCount`).
 - `GET /api/trips/:id` → `200 Trip` (nur eigene, sonst 404).
 - `POST /api/trips/:id/end` Body `TripEnd` → `200 Trip`.
+- `PATCH /api/trips/:id` Body `TripUpdate` → `200 Trip` (nur eigene; z.B. wenn die CLI die
+  Zugnummer erst nachträglich aus dem ICE-Portal erfährt). Auch per Bearer-Token nutzbar.
 - `POST /api/trips/:id/samples` Body `SampleBatch` (JSON; optional `Content-Encoding: gzip`) → `200 SampleBatchResponse`.
   - idempotent über `id` (ON CONFLICT DO NOTHING → zählt als `duplicates`).
   - Server berechnet `ts = client ts + trip.clockOffsetMs`, `h3_r8`/`h3_r9` aus lat/lon (h3-js `latLngToCell`).
+  - `iceState`/`posSource` (siehe Schema `Sample` in `packages/shared`) werden unverändert in
+    `samples.ice_state`/`samples.pos_source` übernommen und von `GET /api/trips/:id/samples` zurückgegeben.
   - `net`-Token: Signatur prüfen (HMAC wie whoami). Gültig → `asn`, `net_class`, `ip_version` übernehmen,
     auch wenn `exp` abgelaufen ist (Offline-Upload). Ungültig → `net_class=unknown` + Flag `net_sig_invalid`.
   - Flags statt Ablehnung: `out_of_bbox` (außerhalb `BBOX`), `bad_accuracy` (> MAX_ACCURACY_M),
@@ -43,6 +64,8 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
 - `GET /api/trips/:id/samples` → `200 TripSamples` (nur eigene, sonst 404): `{ trip, samples, asns }`.
   `samples` enthält alle Samples der Fahrt in zeitlicher Reihenfolge (reduzierte Felder, siehe
   Schema `TripSample`), `asns` die je ASN gesehenen Samples (`asn`, `name`, `netClass`, `samples`).
+  Jedes Sample liefert zusätzlich `iceState`/`posSource` (noch nicht Teil des `TripSample`-Schemas in
+  `packages/shared`, das parallel bearbeitet wird; Web-Client erweitert lokal, siehe `apps/web/src/lib/api.ts`).
 
 ## Admin (Auth + Rolle `admin` Pflicht, sonst `401`/`403`)
 - `GET /api/admin/asns?filter=unknown|all` → `200 AdminAsn[]`, sortiert nach `seen` absteigend.
@@ -101,10 +124,22 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
 - `GET /api/public/stats` → `200 PublicStats`.
 - `GET /api/public/live` → `{ activeTrips }` (Fahrten mit `last_sample_at` in den letzten 5 min).
 
+## Downloads
+- `GET /dl/<dateiname>` → CLI-Binaries aus `DOWNLOADS_DIR` (relativ zu `apps/api`, Standard
+  `../../.run/dist`), z.B. `/dl/bahnnet-linux-amd64`. `Content-Disposition: attachment`,
+  `Cache-Control: no-cache`. Fehlt das Verzeichnis, wird nur gewarnt und `/dl/*` liefert `404`.
+
 ## Statisch
-- `WEB_DIST` gesetzt → Dateien aus dem Verzeichnis, unbekannte Pfade ohne `/api`, `/ws`, `/mailpit`, `/tiles` → `index.html`.
+- `WEB_DIST` gesetzt → Dateien aus dem Verzeichnis, unbekannte Pfade ohne `/api`, `/ws`, `/mailpit`, `/tiles`, `/dl` → `index.html`.
 - `TILES_DIR` gesetzt → `/tiles/*` statisch mit Range-Support (`basemap.pmtiles`, `fonts/…`, `sprites/…`).
 - `MAILPIT_UPSTREAM` gesetzt → `/mailpit/*` Reverse-Proxy (inkl. WebSocket) auf Mailpit (Webroot `/mailpit`).
+
+## Serverseitige Jobs
+`apps/api/src/jobs.ts`, alle 5 Minuten (einmal sofort beim Start), Logging nur als Zähler:
+- Aktive Fahrten ohne neue Samples seit `TRIP_IDLE_END_MS` → `status='ended'`,
+  `ended_at = coalesce(last_sample_at, started_at)`.
+- Abgelaufene Sessions (`sessions.expires_at`) und nicht mehr gültige Magic Links
+  (`magic_links.expires_at`) werden gelöscht.
 
 ## Logging
 Fastify-Logger mit `logController: new LogController({ disableRequestLogging: true })` (ersetzt das in

@@ -6,6 +6,7 @@ import { createDb } from './db/client.js';
 import { MailService } from './lib/mail.js';
 import { AsnService } from './lib/asn.js';
 import { buildApp } from './app.js';
+import { startJobs } from './jobs.js';
 import { SPEEDTEST_BUFFER_SIZE, type AppContext } from './context.js';
 
 const ONE_HOUR_MS = 60 * 60_000;
@@ -33,6 +34,8 @@ async function main(): Promise<void> {
     asn.loadRanges(cfg.IPTOASN_URL, cachePath, app.log).catch((err) => app.log.warn({ err: String(err) }, 'ASN-Reload fehlgeschlagen'));
   }, ONE_HOUR_MS);
   reloadInterval.unref();
+
+  startJobs(db, app.log);
 
   await app.listen({ port: cfg.PORT, host: cfg.HOST });
 }

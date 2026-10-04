@@ -5,6 +5,8 @@ import { z } from 'zod';
 import {
 	AdminAsn,
 	AdminAsnUpdateResponse,
+	ApiTokenCreated,
+	ApiTokenInfo,
 	CellsResponse,
 	ConfirmRequest,
 	Me,
@@ -18,9 +20,12 @@ import {
 	SmtpTestResponse,
 	Trip,
 	TripEnd,
+	TripSample,
 	TripSamples,
+	TripUpdate,
 	WhoamiResponse,
 	type AdminAsnUpdate,
+	type ApiTokenCreate,
 	type CellsQuery,
 	type SmtpSettingsUpdate,
 	type SmtpTestRequest,
@@ -31,6 +36,15 @@ type MagicLinkRequestBody = z.infer<typeof MagicLinkRequest>;
 type ConfirmRequestBody = z.infer<typeof ConfirmRequest>;
 type MeUpdateBody = z.infer<typeof MeUpdate>;
 type TripEndBody = z.infer<typeof TripEnd>;
+type TripUpdateBody = z.infer<typeof TripUpdate>;
+type ApiTokenCreateBody = z.infer<typeof ApiTokenCreate>;
+
+// Erweitert TripSample/TripSamples lokal um iceState/posSource (noch nicht Teil des gemeinsamen
+// Schemas in packages/shared, das parallel von einem anderen Agenten bearbeitet wird). Der Server
+// liefert die Felder bereits mit, siehe apps/api/src/routes/trips.ts.
+/** Beibehaltene Aliasnamen; die Felder iceState/posSource sind inzwischen Teil des gemeinsamen Schemas. */
+export type TripSampleExt = TripSample;
+export type TripSamplesExt = TripSamples;
 
 /** Fehler aus der API, inkl. RFC-9457-Feldern. status 0 = Anfrage konnte nicht gesendet werden. */
 export class ApiError extends Error {
@@ -102,10 +116,15 @@ export const api = {
 	createTrip: (body: TripCreate) => request('/api/trips', withBody('POST', body), Trip),
 	listTrips: () => request('/api/trips', {}, z.array(Trip)),
 	getTrip: (id: string) => request(`/api/trips/${id}`, {}, Trip),
+	updateTrip: (id: string, body: TripUpdateBody) => request(`/api/trips/${id}`, withBody('PATCH', body), Trip),
 	getTripSamples: (id: string) => request(`/api/trips/${id}/samples`, {}, TripSamples),
 	endTrip: (id: string, body: TripEndBody) => request(`/api/trips/${id}/end`, withBody('POST', body), Trip),
 	uploadSamples: (id: string, samples: Sample[]) =>
 		request(`/api/trips/${id}/samples`, withBody('POST', { samples }), SampleBatchResponse),
+
+	listTokens: () => request('/api/tokens', {}, z.array(ApiTokenInfo)),
+	createToken: (body: ApiTokenCreateBody) => request('/api/tokens', withBody('POST', body), ApiTokenCreated),
+	revokeToken: (id: string) => request<void>(`/api/tokens/${id}`, withBody('DELETE')),
 
 	whoami: () => request('/api/net/whoami', {}, WhoamiResponse),
 	speedStart: () => request<void>('/api/speed/start', withBody('POST')),

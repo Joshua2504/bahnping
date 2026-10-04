@@ -69,6 +69,12 @@ export class Outbox {
 		}
 	}
 
+	/** Noch nicht hochgeladene Samples einer Fahrt, z.B. um nach einem Reload die Live-Karte zu befüllen. */
+	async getPendingSamples(tripId: string): Promise<Sample[]> {
+		const entries = await db.outbox.where('tripId').equals(tripId).toArray();
+		return entries.map((e) => e.sample);
+	}
+
 	async flushTrip(tripId: string): Promise<void> {
 		if (this.status.needsLogin) return;
 		for (;;) {

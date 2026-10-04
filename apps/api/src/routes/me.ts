@@ -65,7 +65,7 @@ export function registerMeRoutes(app: FastifyInstance): void {
     }
   });
 
-  app.delete('/api/me', { preHandler: app.requireAuth }, async (request, reply) => {
+  app.delete('/api/me', { preHandler: [app.requireAuth, app.requireCookieAuth] }, async (request, reply) => {
     await db.delete(users).where(eq(users.id, request.userId!));
     reply.clearCookie('bt_session', { path: '/' });
     reply.code(204).send();

@@ -38,6 +38,10 @@ const SampleBase = z.object({
   connType: z.string().max(20).nullable().optional(),
   /** navigator.connection.effectiveType, nur Chromium */
   effectiveType: z.string().max(10).nullable().optional(),
+  /** Konnektivitätsstatus laut ICE-Portal (HIGH, MIDDLE, LOW, UNSTABLE, NO_INFO), nur App/CLI */
+  iceState: z.string().max(20).nullable().optional(),
+  /** Positionsquelle: gps (Gerät), iceportal, none */
+  posSource: z.enum(['gps', 'iceportal', 'none']).optional(),
 });
 
 export const PingWindowSample = SampleBase.extend({
@@ -102,6 +106,13 @@ export type Trip = z.infer<typeof Trip>;
 
 export const TripEnd = z.object({ clockOffsetMs: z.number().int().optional() });
 
+/** Nachträgliche Korrektur, z.B. wenn die CLI die Zugnummer erst aus dem ICE-Portal erfährt. */
+export const TripUpdate = z.object({
+  trainType: TrainType.optional(),
+  trainNumber: z.string().trim().max(20).nullable().optional(),
+});
+export type TripUpdate = z.infer<typeof TripUpdate>;
+
 // ---------- Auth / Konto ----------
 
 export const MagicLinkRequest = z.object({
@@ -126,6 +137,23 @@ export const Me = z.object({
   createdAt: z.string(),
 });
 export type Me = z.infer<typeof Me>;
+
+// ---------- API-Tokens (CLI/App) ----------
+
+export const ApiTokenCreate = z.object({
+  name: z.string().trim().min(1).max(60),
+  altcha: z.string().min(10).max(4000),
+});
+export const ApiTokenInfo = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable(),
+});
+export type ApiTokenInfo = z.infer<typeof ApiTokenInfo>;
+/** Das Token selbst wird genau einmal, direkt nach dem Anlegen, ausgegeben. */
+export const ApiTokenCreated = ApiTokenInfo.extend({ token: z.string() });
+export type ApiTokenCreated = z.infer<typeof ApiTokenCreated>;
 
 // ---------- WebSocket ----------
 
@@ -296,6 +324,8 @@ export const TripSample = z.object({
   captive: z.boolean().nullable(),
   asn: z.number().int().nullable(),
   netClass: NetClass,
+  iceState: z.string().nullable().optional(),
+  posSource: z.string().nullable().optional(),
   flags: z.array(z.string()),
 });
 export type TripSample = z.infer<typeof TripSample>;
