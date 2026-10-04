@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -48,6 +49,10 @@ func cmdDiag(_ []string) error {
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("  %s\n    Fehler: %v\n", u, err)
+			if strings.Contains(err.Error(), "no route to host") && runtime.GOOS == "darwin" {
+				fmt.Println("    Hinweis: macOS blockiert private Adressen ohne Berechtigung. Systemeinstellungen →")
+				fmt.Println("    Datenschutz & Sicherheit → Lokales Netzwerk → Terminal-App erlauben und neu starten.")
+			}
 			continue
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 600))

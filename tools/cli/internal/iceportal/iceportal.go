@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -341,6 +342,11 @@ func ShortError(err error) string {
 		return "DNS: iceportal.de nicht auflösbar (kein ICE-WLAN?)"
 	case strings.Contains(msg, "deadline exceeded"), strings.Contains(msg, "Timeout"):
 		return "Zeitüberschreitung"
+	case strings.Contains(msg, "no route to host") && runtime.GOOS == "darwin":
+		// macOS 15+: ohne Berechtigung "Lokales Netzwerk" sind private Adressen nicht erreichbar.
+		return "macOS blockiert: Terminal unter Datenschutz → Lokales Netzwerk erlauben"
+	case strings.Contains(msg, "no route to host"):
+		return "Keine Route zum Portal"
 	case strings.Contains(msg, "connection refused"):
 		return "Verbindung abgelehnt"
 	case strings.Contains(msg, "certificate"), strings.Contains(msg, "x509"):
