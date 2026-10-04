@@ -26,6 +26,14 @@ function describeSmtpError(err: unknown): string {
   const code = (err as { code?: string; responseCode?: number } | undefined)?.code;
   const responseCode = (err as { responseCode?: number } | undefined)?.responseCode;
   if (code === 'EAUTH' || responseCode === 535) return 'Authentifizierung fehlgeschlagen (Benutzer/Passwort prüfen).';
+  if (code === 'EENVELOPE') {
+    // Antwort des Servers enthält nur Adressen und Status, keine Zugangsdaten – für Admins hilfreich.
+    const response = (err as { response?: string } | undefined)?.response ?? (err instanceof Error ? err.message : '');
+    if (/sender|not owned/i.test(response)) {
+      return `Absenderadresse vom SMTP-Server abgelehnt – Absender muss zum Benutzerkonto gehören. Antwort: ${response}`;
+    }
+    return `Empfänger vom SMTP-Server abgelehnt. Antwort: ${response}`;
+  }
   if (code === 'ECONNREFUSED') return 'Verbindung abgelehnt (Host/Port prüfen).';
   if (code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'ECONNECTION') return 'Zeitüberschreitung bei der Verbindung zum SMTP-Server.';
   if (code === 'CERT_HAS_EXPIRED' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT') {

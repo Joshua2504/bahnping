@@ -3,8 +3,17 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta name="theme-color" content="#000000" />
-		<meta name="color-scheme" content="dark" />
+		<meta name="theme-color" content="#0a0c10" />
+		<meta name="color-scheme" content="dark light" />
+		<script>
+			// Farbmodus vor dem ersten Rendern setzen (siehe #lib/theme.svelte.ts), sonst flackert es.
+			(function () {
+				var t;
+				try { t = localStorage.getItem('bahnping-theme'); } catch (e) {}
+				if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+				document.documentElement.dataset.theme = t;
+			})();
+		</script>
 		<link rel="manifest" href="/manifest.webmanifest" />
 		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 		%sveltekit.head%

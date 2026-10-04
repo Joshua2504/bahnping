@@ -1,18 +1,32 @@
-/* Handgeschriebenes, mobile-first CSS. Dunkelmodus als Standard, OLED-Schwarz im Fahrt-Modus. */
+/* Handgeschriebenes, mobile-first CSS. Hell/Dunkel über `data-theme` auf <html> (siehe
+   #lib/theme.svelte.ts), Dunkel als Standard. Der Fahrt-Modus bleibt immer OLED-Schwarz. */
 
-:root {
+:root,
+[data-theme='dark'] {
 	color-scheme: dark;
-	--bg: #0b0d10;
-	--bg-elevated: #15181c;
-	--bg-card: #1a1e23;
-	--fg: #e8eaed;
-	--fg-dim: #9aa0a6;
+	--bg: #0a0c10;
+	--bg-elevated: rgba(16, 19, 24, 0.78);
+	--bg-card: #12161c;
+	--bg-subtle: #181d24;
+	--bg-inset: #0d1014;
+	--fg: #e9ecf1;
+	--fg-dim: #8c95a3;
+	--fg-faint: #5c6573;
 	--accent: #4ade80;
 	--accent-dim: #22c55e;
+	--accent-fg: #04170a;
+	--accent-soft: rgba(74, 222, 128, 0.12);
 	--danger: #f87171;
+	--danger-soft: rgba(248, 113, 113, 0.12);
 	--warn: #fbbf24;
-	--border: #2a2f36;
-	--radius: 10px;
+	--info: #38bdf8;
+	--border: #232933;
+	--border-strong: #303846;
+	--shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+	--glow: radial-gradient(1200px 500px at 10% -10%, rgba(74, 222, 128, 0.07), transparent 60%),
+		radial-gradient(900px 400px at 110% 0%, rgba(56, 189, 248, 0.06), transparent 60%);
+	--radius: 14px;
+	--radius-sm: 10px;
 	font-family:
 		system-ui,
 		-apple-system,
@@ -21,6 +35,31 @@
 		Helvetica,
 		Arial,
 		sans-serif;
+}
+
+[data-theme='light'] {
+	color-scheme: light;
+	--bg: #f5f6f8;
+	--bg-elevated: rgba(255, 255, 255, 0.8);
+	--bg-card: #ffffff;
+	--bg-subtle: #f0f2f5;
+	--bg-inset: #f7f8fa;
+	--fg: #111418;
+	--fg-dim: #5b6472;
+	--fg-faint: #8a93a1;
+	--accent: #16a34a;
+	--accent-dim: #15803d;
+	--accent-fg: #ffffff;
+	--accent-soft: rgba(22, 163, 74, 0.1);
+	--danger: #dc2626;
+	--danger-soft: rgba(220, 38, 38, 0.08);
+	--warn: #b45309;
+	--info: #0284c7;
+	--border: #e3e6eb;
+	--border-strong: #d2d7de;
+	--shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px -16px rgba(16, 24, 40, 0.18);
+	--glow: radial-gradient(1200px 500px at 10% -10%, rgba(22, 163, 74, 0.06), transparent 60%),
+		radial-gradient(900px 400px at 110% 0%, rgba(2, 132, 199, 0.05), transparent 60%);
 }
 
 * {
@@ -36,9 +75,18 @@ body {
 	min-height: 100%;
 }
 
+html {
+	-webkit-text-size-adjust: 100%;
+	-webkit-tap-highlight-color: transparent;
+}
+
 body {
 	font-size: 16px;
 	line-height: 1.45;
+	background-image: var(--glow);
+	background-repeat: no-repeat;
+	background-attachment: fixed;
+	-webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -46,6 +94,11 @@ h2,
 h3 {
 	line-height: 1.2;
 	margin: 0 0 0.5em;
+	letter-spacing: -0.01em;
+}
+
+h2 {
+	font-size: 1.1rem;
 }
 
 a {
@@ -62,52 +115,155 @@ p {
 	margin: 0 0 1em;
 }
 
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
 .app-shell {
 	min-height: 100vh;
+	min-height: 100dvh;
 	display: flex;
 	flex-direction: column;
 }
 
+/* ---------- Navigation: auf dem Handy horizontal wischbar, Desktop einzeilig ---------- */
+
 .app-nav {
 	display: flex;
 	align-items: center;
-	gap: 0.25rem;
-	padding: 0.5rem 0.75rem;
+	gap: 0.5rem;
+	padding: 0.5rem max(0.75rem, env(safe-area-inset-right)) 0.5rem max(0.75rem, env(safe-area-inset-left));
+	padding-top: max(0.5rem, env(safe-area-inset-top));
 	border-bottom: 1px solid var(--border);
 	background: var(--bg-elevated);
+	backdrop-filter: saturate(160%) blur(14px);
+	-webkit-backdrop-filter: saturate(160%) blur(14px);
 	position: sticky;
 	top: 0;
-	z-index: 10;
-	flex-wrap: wrap;
+	z-index: 20;
 }
 
 .app-nav__brand {
-	font-weight: 700;
-	margin-right: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	font-weight: 750;
+	letter-spacing: -0.02em;
 	color: var(--fg);
+	flex-shrink: 0;
 }
 
-.app-nav a {
-	color: var(--fg-dim);
-	padding: 0.4rem 0.6rem;
-	border-radius: var(--radius);
-	font-size: 0.9rem;
-}
-
-.app-nav a:hover,
-.app-nav a.active {
-	color: var(--fg);
-	background: var(--bg-card);
+.app-nav__brand:hover {
 	text-decoration: none;
+}
+
+.app-nav__logo {
+	width: 1.6rem;
+	height: 1.6rem;
+	border-radius: 8px;
+	display: grid;
+	place-items: center;
+	background: linear-gradient(135deg, var(--accent), var(--info));
+	color: #04170a;
+	font-size: 0.8rem;
+	font-weight: 800;
+}
+
+.app-nav__links {
+	display: flex;
+	gap: 0.15rem;
+	overflow-x: auto;
+	scrollbar-width: none;
+	flex: 1;
+	min-width: 0;
+	mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.app-nav__links::-webkit-scrollbar {
+	display: none;
+}
+
+.app-nav__links a {
+	color: var(--fg-dim);
+	padding: 0.45rem 0.7rem;
+	border-radius: 999px;
+	font-size: 0.9rem;
+	white-space: nowrap;
+	transition:
+		background 0.15s,
+		color 0.15s;
+}
+
+.app-nav__links a:hover,
+.app-nav__links a.active {
+	color: var(--fg);
+	background: var(--bg-subtle);
+	text-decoration: none;
+}
+
+.app-nav__links a.active {
+	box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.app-nav__end {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-shrink: 0;
+}
+
+.app-nav__status {
+	color: var(--fg-dim);
+	font-size: 0.85rem;
+	max-width: 10rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.icon-btn {
+	display: inline-grid;
+	place-items: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--bg-card);
+	color: var(--fg);
+	cursor: pointer;
+	padding: 0;
+	transition:
+		background 0.15s,
+		border-color 0.15s;
+}
+
+.icon-btn:hover {
+	border-color: var(--border-strong);
+	background: var(--bg-subtle);
+}
+
+.icon-btn svg {
+	width: 1.05rem;
+	height: 1.05rem;
+}
+
+@media (max-width: 559px) {
+	.app-nav__status {
+		display: none;
+	}
 }
 
 .app-main {
 	flex: 1;
-	padding: 1rem;
-	max-width: 960px;
+	padding: 1rem max(0.85rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom))
+		max(0.85rem, env(safe-area-inset-left));
+	max-width: 1040px;
 	width: 100%;
 	margin: 0 auto;
 }
+
+/* ---------- Bausteine ---------- */
 
 .card {
 	background: var(--bg-card);
@@ -115,6 +271,7 @@ p {
 	border-radius: var(--radius);
 	padding: 1rem;
 	margin-bottom: 1rem;
+	box-shadow: var(--shadow);
 }
 
 .card-grid {
@@ -129,18 +286,25 @@ p {
 	justify-content: center;
 	gap: 0.4rem;
 	background: var(--accent);
-	color: #04170a;
+	color: var(--accent-fg);
 	border: none;
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm);
 	padding: 0.7rem 1.1rem;
 	font-size: 1rem;
 	font-weight: 600;
 	cursor: pointer;
 	min-height: 44px;
+	transition:
+		background 0.15s,
+		transform 0.1s;
 }
 
 .btn:hover {
 	background: var(--accent-dim);
+}
+
+.btn:active {
+	transform: scale(0.98);
 }
 
 .btn:disabled {
@@ -151,12 +315,16 @@ p {
 .btn.secondary {
 	background: transparent;
 	color: var(--fg);
-	border: 1px solid var(--border);
+	border: 1px solid var(--border-strong);
+}
+
+.btn.secondary:hover {
+	background: var(--bg-subtle);
 }
 
 .btn.danger {
 	background: var(--danger);
-	color: #1a0505;
+	color: #fff;
 }
 
 .field {
@@ -173,10 +341,10 @@ p {
 
 input,
 select {
-	background: var(--bg);
+	background: var(--bg-inset);
 	color: var(--fg);
 	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm);
 	padding: 0.6rem 0.7rem;
 	font-size: 1rem;
 	min-height: 44px;
@@ -189,7 +357,7 @@ select:focus {
 }
 
 .notice {
-	border-radius: var(--radius);
+	border-radius: var(--radius-sm);
 	padding: 0.7rem 0.9rem;
 	margin-bottom: 1rem;
 	border: 1px solid var(--border);
@@ -198,11 +366,13 @@ select:focus {
 .notice.success {
 	border-color: var(--accent-dim);
 	color: var(--accent);
+	background: var(--accent-soft);
 }
 
 .notice.error {
 	border-color: var(--danger);
 	color: var(--danger);
+	background: var(--danger-soft);
 }
 
 .notice.warn {
@@ -214,15 +384,15 @@ select:focus {
 .live-badge {
 	display: inline-flex;
 	align-items: center;
-	gap: 0.3rem;
+	gap: 0.35rem;
 	margin-left: 0.5rem;
-	padding: 0.1rem 0.5rem;
+	padding: 0.15rem 0.55rem;
 	border-radius: 999px;
-	background: var(--danger);
-	color: #1a0505;
+	background: #ef4444;
+	color: #fff;
 	font-size: 0.7rem;
 	font-weight: 700;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.06em;
 	vertical-align: middle;
 }
 
@@ -232,7 +402,25 @@ select:focus {
 	height: 0.4rem;
 	border-radius: 50%;
 	background: currentColor;
-	opacity: 0.8;
+	animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.35;
+		transform: scale(0.75);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.live-badge::before {
+		animation: none;
+	}
 }
 
 table {
@@ -248,9 +436,57 @@ td {
 	border-bottom: 1px solid var(--border);
 }
 
-/* ---------- Fahrt-Modus: Vollbild, OLED-Schwarz ---------- */
+th {
+	color: var(--fg-dim);
+	font-weight: 600;
+	font-size: 0.8rem;
+}
+
+/* MapLibre-Popups an das Farbschema anpassen. */
+.maplibregl-popup-content {
+	background: var(--bg-card);
+	color: var(--fg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow);
+	font-size: 0.85rem;
+}
+
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+	border-top-color: var(--bg-card);
+}
+
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+	border-bottom-color: var(--bg-card);
+}
+
+.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+	border-right-color: var(--bg-card);
+}
+
+.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+	border-left-color: var(--bg-card);
+}
+
+.maplibregl-popup-close-button {
+	color: var(--fg-dim);
+	font-size: 1.1rem;
+	padding: 0 0.4rem;
+}
+
+/* ---------- Fahrt-Modus: Vollbild, OLED-Schwarz (unabhängig vom Farbschema) ---------- */
 
 .track-mode {
+	color-scheme: dark;
+	--fg: #e9ecf1;
+	--fg-dim: #8c95a3;
+	--border: #1c1c1c;
+	--bg-card: #0a0a0a;
+	--bg-inset: #0a0a0a;
 	background: #000;
 	color: var(--fg);
 	min-height: 100vh;
@@ -267,8 +503,8 @@ td {
 }
 
 .stat {
-	background: #0a0a0a;
-	border: 1px solid #1c1c1c;
+	background: var(--bg-inset);
+	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	padding: 0.75rem;
 }
