@@ -87,7 +87,7 @@ func (p *Poller) debugPrintOnce(flag *bool, label, raw string) {
 		return
 	}
 	*flag = true
-	fmt.Fprintf(os.Stderr, "[debug] ICE-Portal %s Rohantwort: %s\n", label, raw)
+	fmt.Fprintf(os.Stderr, "[debug] ICE-Portal %s Rohantwort: %s\r\n", label, raw)
 }
 
 func (p *Poller) runLoop(ctx context.Context, _ string, normalInterval time.Duration, fetch func(context.Context) error) {

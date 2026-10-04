@@ -115,7 +115,7 @@ func cmdTrack(args []string) error {
 	if !flags.plain {
 		keyReader, err = tui.NewKeyReader()
 		if err != nil && flags.debug {
-			fmt.Fprintf(os.Stderr, "[debug] Tastatursteuerung nicht verfügbar: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[debug] Tastatursteuerung nicht verfügbar: %v\r\n", err)
 		}
 	}
 	if keyReader != nil {
@@ -141,7 +141,7 @@ func cmdTrack(args []string) error {
 	ws := wsclient.New(wsURL, flags.debug, onRtt, onConnect)
 	go ws.Run(runCtx)
 	if err := ws.WaitReady(runCtx, 10*time.Second); err != nil {
-		fmt.Fprintf(os.Stderr, "Warnung: WS-Zeit-Sync beim Start fehlgeschlagen (%v), Fahrt startet trotzdem.\n", err)
+		fmt.Fprintf(os.Stderr, "Warnung: WS-Zeit-Sync beim Start fehlgeschlagen (%v), Fahrt startet trotzdem.\r\n", err)
 	}
 	clockOffset := ws.ClockOffsetMs()
 
@@ -154,7 +154,7 @@ func cmdTrack(args []string) error {
 	if err != nil {
 		return fmt.Errorf("Fahrt konnte nicht angelegt werden: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Fahrt %s gestartet (%s).\n", trip.ID, trainLabel(trainType, trainNumber))
+	fmt.Fprintf(os.Stderr, "Fahrt %s gestartet (%s).\r\n", trip.ID, trainLabel(trainType, trainNumber))
 
 	state.Update(func(s *tui.Snapshot) {
 		s.TripID = trip.ID
@@ -331,7 +331,7 @@ func patchTrainNumberWhenKnown(ctx context.Context, api *apiclient.Client, tripI
 		if err != nil {
 			if apiclient.IsNotFound(err) {
 				if !warned404 && debug {
-					fmt.Fprintln(os.Stderr, "[debug] PATCH /api/trips/:id liefert 404 (Route evtl. noch nicht vorhanden), Zugnummer wird nicht nachgetragen.")
+					fmt.Fprint(os.Stderr, "[debug] PATCH /api/trips/:id liefert 404 (Route evtl. noch nicht vorhanden), Zugnummer wird nicht nachgetragen.", "\r\n")
 				}
 				warned404 = true
 				continue // weiter versuchen schadet nicht, aber nicht erneut warnen
@@ -365,15 +365,15 @@ func resendLeftoverOutboxes(ctx context.Context, api *apiclient.Client, stateDir
 		if err != nil || n == 0 {
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "Sende %d gepufferte Messung(en) einer vorherigen Fahrt (%s) nach...\n", n, tripID)
+		fmt.Fprintf(os.Stderr, "Sende %d gepufferte Messung(en) einer vorherigen Fahrt (%s) nach...\r\n", n, tripID)
 		sent := flushOnce(ctx, api, ob, tripID)
 		if sent < n {
-			fmt.Fprintf(os.Stderr, "  %d/%d gesendet, Rest wird beim nächsten Start erneut versucht.\n", sent, n)
+			fmt.Fprintf(os.Stderr, "  %d/%d gesendet, Rest wird beim nächsten Start erneut versucht.\r\n", sent, n)
 		} else {
-			fmt.Fprintln(os.Stderr, "  erledigt.")
+			fmt.Fprint(os.Stderr, "  erledigt.", "\r\n")
 		}
 		if debug {
-			fmt.Fprintf(os.Stderr, "[debug] Outbox-Datei: %s\n", path)
+			fmt.Fprintf(os.Stderr, "[debug] Outbox-Datei: %s\r\n", path)
 		}
 	}
 }

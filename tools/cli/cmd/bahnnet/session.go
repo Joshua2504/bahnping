@@ -98,7 +98,7 @@ func (s *trackSession) buildSampleBase(kind string) model.Sample {
 func (s *trackSession) appendSample(sample model.Sample) {
 	if err := s.outbox.Append(sample); err != nil {
 		if s.flags.debug {
-			fmt.Fprintf(os.Stderr, "[debug] Outbox-Fehler: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[debug] Outbox-Fehler: %v\r\n", err)
 		}
 		return
 	}
@@ -492,13 +492,13 @@ func (s *trackSession) finish() error {
 		s.outbox.Remove() //nolint:errcheck
 	}
 
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintf(os.Stderr, "Fahrt %s beendet.\n", s.trip.ID)
+	fmt.Fprint(os.Stderr, "\r\n")
+	fmt.Fprintf(os.Stderr, "Fahrt %s beendet.\r\n", s.trip.ID)
 	if endErr != nil {
-		fmt.Fprintf(os.Stderr, "Warnung: Fahrtende konnte dem Server nicht gemeldet werden: %v\n", endErr)
+		fmt.Fprintf(os.Stderr, "Warnung: Fahrtende konnte dem Server nicht gemeldet werden: %v\r\n", endErr)
 	}
 	if remaining > 0 {
-		fmt.Fprintf(os.Stderr, "%d Messung(en) konnten nicht gesendet werden und werden beim nächsten Start von \"bahnnet track\" nachgesendet (%s).\n", remaining, s.outbox.Path())
+		fmt.Fprintf(os.Stderr, "%d Messung(en) konnten nicht gesendet werden und werden beim nächsten Start von \"bahnnet track\" nachgesendet (%s).\r\n", remaining, s.outbox.Path())
 	}
 	return nil
 }
