@@ -10,6 +10,7 @@
 	import { ApiError, api } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { FULL_LOSS_COLOR, FULL_LOSS_STROKE, rttColorExpression } from '#lib/map/colors.js';
+	import { mapPrefs, speedtestVisibility } from '#lib/map/prefs.svelte.js';
 	import { tracker } from '#lib/tracker/tracker.svelte.js';
 	import { i18n } from '#lib/i18n.svelte.js';
 
@@ -20,12 +21,14 @@
 		map: 'Karte',
 		follow: 'Folgen',
 		previousMeasurements: 'Frühere Messungen',
+		speedtests: 'Speedtests',
 		mineLoadError: 'Frühere Messungen konnten nicht geladen werden',
 	};
 	const en: typeof de = {
 		map: 'Map',
 		follow: 'Follow',
 		previousMeasurements: 'Previous measurements',
+		speedtests: 'Speed tests',
 		mineLoadError: 'Previous measurements could not be loaded',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
@@ -173,6 +176,7 @@
 						type: 'circle',
 						source: 'track-points',
 						filter: ['==', ['get', 'kind'], 'speedtest'],
+						layout: { visibility: speedtestVisibility() },
 						paint: {
 							'circle-radius': 8,
 							'circle-color': '#38bdf8',
@@ -256,6 +260,12 @@
 		if (created) updatePosition();
 	});
 
+	// Speedtests an/aus -> nur die Sichtbarkeit des Layers umschalten.
+	$effect(() => {
+		const visibility = speedtestVisibility();
+		if (created && map?.getLayer('track-points-speedtest')) map.setLayoutProperty('track-points-speedtest', 'visibility', visibility);
+	});
+
 	// „Frühere Messungen“ an/aus -> sofort (neu) laden bzw. ausblenden.
 	$effect(() => {
 		if (!created) return;
@@ -288,6 +298,15 @@
 			<label>
 				<input type="checkbox" bind:checked={showMine} style="width: auto; min-height: auto" />
 				{m.previousMeasurements}
+			</label>
+			<label>
+				<input
+					type="checkbox"
+					checked={mapPrefs.showSpeedtests}
+					onchange={(e) => mapPrefs.setShowSpeedtests(e.currentTarget.checked)}
+					style="width: auto; min-height: auto"
+				/>
+				{m.speedtests}
 			</label>
 			<button type="button" class="btn secondary" style="padding: 0.3rem 0.7rem" onclick={toggleFullscreen}>⛶</button>
 		</div>

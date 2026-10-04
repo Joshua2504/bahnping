@@ -16,6 +16,7 @@
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { RTT_LEGEND, rttColor, rttColorExpression, SPEED_GRADIENT, SPEEDTEST_COLOR, speedColorExpression } from '#lib/map/colors.js';
 	import { attachHoverPopup } from '#lib/map/hover-popup.js';
+	import { mapPrefs, speedtestVisibility } from '#lib/map/prefs.svelte.js';
 	import { median, percentile } from '#lib/tracker/util.js';
 	import { theme } from '#lib/theme.svelte.js';
 
@@ -75,6 +76,7 @@
 		following: 'Folgt',
 		follow: 'Folgen',
 		route: 'Strecke',
+		toggleSpeedtests: 'Speedtests auf der Karte ein-/ausblenden',
 		iceTitle: 'ICE-Portal-Status',
 		iceTimeline: 'Zeitleiste des ICE-Portal-Status',
 		sections: (n: number) => `${n} ${n === 1 ? 'Abschnitt' : 'Abschnitte'}`,
@@ -138,6 +140,7 @@
 		following: 'Following',
 		follow: 'Follow',
 		route: 'Route',
+		toggleSpeedtests: 'Show/hide speed tests on the map',
 		iceTitle: 'ICE portal status',
 		iceTimeline: 'Timeline of the ICE portal status',
 		sections: (n: number) => `${n} ${n === 1 ? 'section' : 'sections'}`,
@@ -588,6 +591,7 @@
 					type: 'circle',
 					source: 'route',
 					filter: ['==', ['get', 'kind'], 'speedtest'],
+					layout: { visibility: speedtestVisibility() },
 					paint: {
 						'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 6, 16, 8],
 						'circle-color': 'rgba(0, 0, 0, 0)',
@@ -601,6 +605,7 @@
 					source: 'route',
 					filter: ['==', ['get', 'kind'], 'speedtest'],
 					layout: {
+						visibility: speedtestVisibility(),
 						'text-field': ['get', 'dlLabel'],
 						'text-font': ['Noto Sans Medium'],
 						'text-size': 11.5,
@@ -849,6 +854,16 @@
 		});
 	});
 
+	// Speedtests ein-/ausgeblendet: nur die Sichtbarkeit der beiden Layer umschalten.
+	$effect(() => {
+		const visibility = speedtestVisibility();
+		untrack(() => {
+			for (const id of ['route-speedtests', 'route-speedtest-badges']) {
+				if (map?.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+			}
+		});
+	});
+
 	// Kartenmodus (Latenz/Tempo) umgeschaltet: nur die Punktfarbe tauschen, kein neuer Style.
 	$effect(() => {
 		const mode = mapMode;
@@ -1069,7 +1084,16 @@
 						<span class="legend__item"><span class="legend__swatch" style="background: {l.color}"></span>{l.label}</span>
 					{/each}
 				{/if}
-				<span class="legend__item"><span class="legend__swatch legend__swatch--ring" style="border-color: {SPEEDTEST_COLOR}"></span>{m.speedtest}</span>
+				<button
+					type="button"
+					class="legend__item legend__toggle"
+					class:off={!mapPrefs.showSpeedtests}
+					aria-pressed={mapPrefs.showSpeedtests}
+					title={m.toggleSpeedtests}
+					onclick={() => mapPrefs.setShowSpeedtests(!mapPrefs.showSpeedtests)}
+				>
+					<span class="legend__swatch legend__swatch--ring" style="border-color: {SPEEDTEST_COLOR}"></span>{m.speedtest}
+				</button>
 			</div>
 		</div>
 	</section>
@@ -1553,6 +1577,22 @@
 		align-items: center;
 		gap: 0.3rem;
 		white-space: nowrap;
+	}
+
+	/* Legenden-Eintrag als Schalter (Speedtests ein-/ausblenden). */
+	.legend__toggle {
+		font: inherit;
+		color: inherit;
+		background: none;
+		border: 0;
+		padding: 0;
+		min-height: auto;
+		cursor: pointer;
+	}
+
+	.legend__toggle.off {
+		opacity: 0.45;
+		text-decoration: line-through;
 	}
 
 	.legend__swatch {
