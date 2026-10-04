@@ -1072,6 +1072,17 @@
 				<button class:on={mapMode === 'rtt'} aria-pressed={mapMode === 'rtt'} onclick={() => (mapMode = 'rtt')}>{m.modeLatency}</button>
 				<button class:on={mapMode === 'speed'} aria-pressed={mapMode === 'speed'} onclick={() => (mapMode = 'speed')}>{m.modeSpeed}</button>
 			</div>
+			<button
+				type="button"
+				class="map-chip"
+				class:on={mapPrefs.showSpeedtests}
+				aria-pressed={mapPrefs.showSpeedtests}
+				title={m.toggleSpeedtests}
+				onclick={() => mapPrefs.setShowSpeedtests(!mapPrefs.showSpeedtests)}
+			>
+				<span class="map-chip__ring" aria-hidden="true"></span>
+				{m.speedtests}
+			</button>
 		</div>
 		<div class="map-card__overlay map-card__overlay--bottom">
 			<div class="legend">
@@ -1560,6 +1571,13 @@
 		background: #0284c7;
 		border-color: #0284c7;
 		color: #fff;
+	}
+
+	.map-chip__ring {
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 50%;
+		border: 2px solid currentColor;
 	}
 
 	.legend {
