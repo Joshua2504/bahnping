@@ -22,6 +22,13 @@
       "when": 1791116643192,
       "tag": "0002_flowery_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791131979190,
+      "tag": "0003_material_captain_cross",
+      "breakpoints": true
     }
   ]
 }

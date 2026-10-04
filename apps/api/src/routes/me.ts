@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, ne } from 'drizzle-orm';
-import { MeUpdate, type Me } from '@bahn/shared';
+import { MeSettingsUpdate, MeUpdate, type Me } from '@bahn/shared';
 import { samples, trips, users } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
@@ -14,6 +14,7 @@ function toMe(row: typeof users.$inferSelect): Me {
     displayName: row.displayName,
     role: row.role as Me['role'],
     createdAt: row.createdAt.toISOString(),
+    livePublic: row.livePublic,
   };
 }
 
@@ -63,6 +64,23 @@ export function registerMeRoutes(app: FastifyInstance): void {
       }
       throw err;
     }
+  });
+
+  // Reine Darstellungs-Einstellung ohne Enumerations-/Spam-Risiko, daher kein ALTCHA nötig; auch
+  // per Bearer-Token nutzbar (z.B. künftig aus der CLI heraus änderbar).
+  app.patch('/api/me/settings', { preHandler: app.requireAuth }, async (request, reply) => {
+    const body = parseOrProblem(MeSettingsUpdate, request.body, reply);
+    if (!body) return;
+    const updated = await db
+      .update(users)
+      .set({ livePublic: body.livePublic })
+      .where(eq(users.id, request.userId!))
+      .returning();
+    if (!updated[0]) {
+      sendProblem(reply, 401, 'Nicht angemeldet');
+      return;
+    }
+    reply.send(toMe(updated[0]));
   });
 
   app.delete('/api/me', { preHandler: [app.requireAuth, app.requireCookieAuth] }, async (request, reply) => {

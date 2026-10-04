@@ -170,6 +170,8 @@ export class AsnService {
         .onConflictDoUpdate({
           target: asnCatalog.asn,
           set: { name: entry.name, netClass: entry.netClass, source: 'seed' },
+          // Admin-Entscheidungen und ENV-Overrides haben Vorrang vor der Startliste.
+          setWhere: sql`${asnCatalog.source} not in ('admin', 'override')`,
         });
     }
     const overrides = parseOverrides(overridesRaw, log);
@@ -177,7 +179,12 @@ export class AsnService {
       await db
         .insert(asnCatalog)
         .values({ asn, name: `ASN ${asn}`, netClass, source: 'override' })
-        .onConflictDoUpdate({ target: asnCatalog.asn, set: { netClass, source: 'override' } });
+        .onConflictDoUpdate({
+          target: asnCatalog.asn,
+          set: { netClass, source: 'override' },
+          // Im Admin-Bereich getroffene Zuordnungen nicht überschreiben.
+          setWhere: sql`${asnCatalog.source} <> 'admin'`,
+        });
     }
     await this.loadClassMap(db);
   }

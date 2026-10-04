@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 // ExpectedPingsPerWindow = WINDOW_MS / PING_INTERVAL_MS = 5.

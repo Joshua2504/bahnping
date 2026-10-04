@@ -71,7 +71,7 @@ func Render(w io.Writer, s Snapshot, first bool) {
 		dur = time.Since(s.StartedAt).Round(time.Second)
 	}
 
-	line("bahnnet – Fahrt %s  %s  Dauer %s", shortID(s.TripID), s.TrainLabel, dur)
+	line("bahnping – Fahrt %s  %s  Dauer %s", shortID(s.TripID), s.TrainLabel, dur)
 	line("")
 
 	wsStatus := "getrennt"
@@ -99,10 +99,10 @@ func Render(w io.Writer, s Snapshot, first bool) {
 
 	if s.IcePortalAvailable {
 		speed := fmtFloatPtr(s.IceSpeedKmh, " km/h", 0)
-		state := orDash(s.IceState)
+		state := iceStateLabel(s.IceState)
 		next := orDash(s.NextStopName)
 		delay := fmtIntPtr(s.NextStopDelayMin, " min")
-		line("ICE-Portal verfügbar  Geschwindigkeit %s  Status %s", speed, state)
+		line("ICE-Portal verfügbar  Geschwindigkeit %s  Netzprognose %s", speed, state)
 		line("Nächster Halt %s  Verspätung %s", next, delay)
 	} else {
 		if s.IcePortalError != "" {
@@ -168,6 +168,25 @@ func fmtPercent(v *float64) string {
 		return "–"
 	}
 	return fmt.Sprintf("%.0f%%", *v)
+}
+
+// iceStateLabel übersetzt connectivity.currentState des Bordportals. Das ist keine
+// Messung, sondern die Abdeckungsprognose der DB für den aktuellen Streckenabschnitt.
+func iceStateLabel(s string) string {
+	switch strings.ToUpper(s) {
+	case "":
+		return "–"
+	case "HIGH":
+		return "gut"
+	case "WEAK":
+		return "schwach"
+	case "UNSTABLE":
+		return "instabil"
+	case "NO_INTERNET":
+		return "Funkloch"
+	default:
+		return s
+	}
 }
 
 func orDash(s string) string {

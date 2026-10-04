@@ -10,7 +10,7 @@ import (
 )
 
 // curlMarker trennt Body und HTTP-Status in der curl-Ausgabe.
-const curlMarker = "\n__BAHNNET_HTTP_STATUS__:"
+const curlMarker = "\n__BAHNPING_HTTP_STATUS__:"
 
 // curlGet holt eine URL über /usr/bin/curl. Wird nur unter macOS genutzt, wenn die direkte
 // Verbindung durch die Berechtigung "Lokales Netzwerk" blockiert ist.
@@ -18,7 +18,7 @@ func curlGet(ctx context.Context, url string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "/usr/bin/curl",
 		"-sS", "--max-time", "5",
 		"-H", "Accept: application/json",
-		"-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnnet",
+		"-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnping",
 		"-w", curlMarker+"%{http_code}",
 		url)
 	var stderr bytes.Buffer

@@ -91,11 +91,11 @@ export function allowMagicLinkSend(email: string): boolean {
 }
 
 export async function sendMagicLinkMail(mail: MailService, to: string, confirmUrl: string): Promise<void> {
-  const text = `Hallo,\n\nmit diesem Link meldest du dich beim Bahn-Netzwerk-Tracker an:\n${confirmUrl}\n\nDer Link ist 15 Minuten gültig und kann nur einmal verwendet werden.\nWenn du diese E-Mail nicht angefordert hast, kannst du sie ignorieren.\n`;
-  const html = `<p>Hallo,</p><p>mit diesem Link meldest du dich beim Bahn-Netzwerk-Tracker an:</p><p><a href="${confirmUrl}">${confirmUrl}</a></p><p>Der Link ist 15 Minuten gültig und kann nur einmal verwendet werden.</p><p>Wenn du diese E-Mail nicht angefordert hast, kannst du sie ignorieren.</p>`;
+  const text = `Hallo,\n\nmit diesem Link meldest du dich bei BahnPing an:\n${confirmUrl}\n\nDer Link ist 15 Minuten gültig und kann nur einmal verwendet werden.\nWenn du diese E-Mail nicht angefordert hast, kannst du sie ignorieren.\n`;
+  const html = `<p>Hallo,</p><p>mit diesem Link meldest du dich bei BahnPing an:</p><p><a href="${confirmUrl}">${confirmUrl}</a></p><p>Der Link ist 15 Minuten gültig und kann nur einmal verwendet werden.</p><p>Wenn du diese E-Mail nicht angefordert hast, kannst du sie ignorieren.</p>`;
   await mail.send({
     to,
-    subject: 'Anmeldung beim Bahn-Netzwerk-Tracker',
+    subject: 'Anmeldung bei BahnPing',
     text,
     html,
   });

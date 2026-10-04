@@ -1,4 +1,4 @@
-module github.com/treudler/bahnnet-cli
+module github.com/treudler/bahnping-cli
 
 go 1.27.1
 

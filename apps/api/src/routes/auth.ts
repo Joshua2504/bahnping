@@ -23,6 +23,7 @@ function toMe(row: typeof users.$inferSelect): Me {
     displayName: row.displayName,
     role: row.role as Me['role'],
     createdAt: row.createdAt.toISOString(),
+    livePublic: row.livePublic,
   };
 }
 

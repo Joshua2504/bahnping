@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Setzt PUBLIC_URL in .env (für Magic Links, Cookie-Secure-Flag, Origin-Prüfung) und startet die API neu.
-# Beispiel: scripts/set-public-url.sh https://bahnnet.treudler.net
+# Beispiel: scripts/set-public-url.sh https://bahnping.treudler.net
 set -euo pipefail
 cd "$(dirname "$0")/.."
 URL="${1:?Aufruf: scripts/set-public-url.sh <url>}"

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 const (

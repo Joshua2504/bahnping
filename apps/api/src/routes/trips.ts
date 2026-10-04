@@ -1,13 +1,24 @@
 import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, sql } from 'drizzle-orm';
 import { latLngToCell } from 'h3-js';
-import { Sample, TripCreate, TripEnd, TripUpdate, type NetClass, type Trip, type TripSample, type TripSamples } from '@bahn/shared';
+import {
+  Sample,
+  TripCreate,
+  TripEnd,
+  TripSamplesQuery,
+  TripUpdate,
+  type NetClass,
+  type Trip,
+  type TripSample,
+  type TripSamples,
+} from '@bahn/shared';
 import { asnCatalog, samples, trips } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { verifyNetToken } from '../lib/netToken.js';
 import { isBadAccuracy, isClockSkew, isImplausibleSpeed, isOutOfBbox, type LastPosition } from '../lib/flags.js';
+import { normalizeTrainNumber } from '../lib/trainNumber.js';
 
 function toTrip(row: typeof trips.$inferSelect, sampleCount?: number): Trip {
   return {
@@ -38,7 +49,7 @@ export function registerTripRoutes(app: FastifyInstance): void {
       .values({
         userId: request.userId!,
         trainType: body.trainType,
-        trainNumber: body.trainNumber ?? null,
+        trainNumber: normalizeTrainNumber(body.trainNumber),
         platform: body.platform,
         clockOffsetMs: body.clockOffsetMs ?? 0,
       })
@@ -89,13 +100,15 @@ export function registerTripRoutes(app: FastifyInstance): void {
     }
     const patch: Partial<typeof trips.$inferInsert> = {};
     if (body.trainType !== undefined) patch.trainType = body.trainType;
-    if (body.trainNumber !== undefined) patch.trainNumber = body.trainNumber;
+    if (body.trainNumber !== undefined) patch.trainNumber = normalizeTrainNumber(body.trainNumber);
     const updated = Object.keys(patch).length > 0 ? await db.update(trips).set(patch).where(eq(trips.id, id)).returning() : existing;
     reply.send(toTrip(updated[0]));
   });
 
   app.get('/api/trips/:id/samples', { preHandler: app.requireAuth }, async (request, reply) => {
     const { id: tripId } = request.params as { id: string };
+    const query = parseOrProblem(TripSamplesQuery, request.query, reply);
+    if (!query) return;
     const tripRows = await db
       .select()
       .from(trips)
@@ -107,10 +120,15 @@ export function registerTripRoutes(app: FastifyInstance): void {
       return;
     }
 
+    // `since` filtert über `created_at` statt `ts`: so werden auch verspätet eingetroffene Samples
+    // mit älterem (korrigiertem) `ts` beim inkrementellen Nachladen einer laufenden Fahrt erfasst.
+    const sampleConditions = query.since
+      ? and(eq(samples.tripId, tripId), gt(samples.createdAt, new Date(query.since)))
+      : eq(samples.tripId, tripId);
     const sampleRows = await db
       .select()
       .from(samples)
-      .where(eq(samples.tripId, tripId))
+      .where(sampleConditions)
       .orderBy(asc(samples.ts));
 
     // Zusätzlich zu TripSample (packages/shared) liefern wir iceState/posSource als lose Erweiterung
@@ -154,8 +172,19 @@ export function registerTripRoutes(app: FastifyInstance): void {
       .groupBy(samples.asn, samples.netClass, asnCatalog.name)
       .orderBy(desc(sql`count(${samples.id})`));
 
+    // Bei `since` enthält `sampleRows` nur den neuen Ausschnitt; `trip.sampleCount` soll aber
+    // weiterhin die Gesamtzahl der Fahrt zeigen.
+    let totalSampleCount = sampleRows.length;
+    if (query.since) {
+      const countRows = await db
+        .select({ n: sql<number>`count(*)`.as('n') })
+        .from(samples)
+        .where(eq(samples.tripId, tripId));
+      totalSampleCount = Number(countRows[0]?.n ?? 0);
+    }
+
     const response: TripSamples = {
-      trip: toTrip(trip, sampleRows.length),
+      trip: toTrip(trip, totalSampleCount),
       samples: tripSamples,
       asns: asnStats.map((r) => ({
         asn: r.asn as number,
@@ -163,6 +192,7 @@ export function registerTripRoutes(app: FastifyInstance): void {
         netClass: r.netClass as NetClass,
         samples: Number(r.samples),
       })),
+      serverTime: new Date().toISOString(),
     };
     reply.send(response);
   });

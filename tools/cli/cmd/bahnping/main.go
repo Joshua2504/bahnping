@@ -1,4 +1,4 @@
-// bahnnet ist die Companion-CLI für bahn-netzwerk-tracker (siehe docs/CLI.md).
+// bahnping ist die Companion-CLI für bahn-netzwerk-tracker (siehe docs/CLI.md).
 // Sie misst auf Laptops ohne GPS im Zug, gestützt auf die inoffizielle ICE-Portal-API
 // für die Position, und sendet dieselben Payloads wie der Browser-Client
 // (packages/shared/src/schemas.ts).
@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/treudler/bahnnet-cli/internal/apiclient"
-	"github.com/treudler/bahnnet-cli/internal/config"
+	"github.com/treudler/bahnping-cli/internal/apiclient"
+	"github.com/treudler/bahnping-cli/internal/config"
 	"golang.org/x/term"
 )
 
@@ -40,7 +40,7 @@ func main() {
 	case "diag":
 		err = cmdDiag(args)
 	case "version", "-v", "--version":
-		fmt.Printf("bahnnet %s\n", version)
+		fmt.Printf("bahnping %s\n", version)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -55,15 +55,15 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprint(os.Stderr, `bahnnet – Companion-CLI für bahn-netzwerk-tracker
+	fmt.Fprint(os.Stderr, `bahnping – Companion-CLI für bahn-netzwerk-tracker
 
 Verwendung:
-  bahnnet login <server-url>   Bei einem Server anmelden (API-Token wird abgefragt)
-  bahnnet logout               Lokale Anmeldung entfernen
-  bahnnet diag                 ICE-Portal und Zug-WLAN-Endpunkte prüfen (Diagnose)
-  bahnnet whoami                Konto- und Netzinformationen anzeigen
-  bahnnet track [optionen]      Fahrt starten und messen
-  bahnnet version               Version anzeigen
+  bahnping login <server-url>   Bei einem Server anmelden (API-Token wird abgefragt)
+  bahnping logout               Lokale Anmeldung entfernen
+  bahnping diag                 ICE-Portal und Zug-WLAN-Endpunkte prüfen (Diagnose)
+  bahnping whoami                Konto- und Netzinformationen anzeigen
+  bahnping track [optionen]      Fahrt starten und messen
+  bahnping version               Version anzeigen
 
 Optionen für "track":
   --train ice|ic|regio|sbahn|other   Zugtyp (sonst ICE-Portal oder interaktive Auswahl)
@@ -80,7 +80,7 @@ Siehe docs/CLI.md für Details.
 
 func cmdLogin(args []string) error {
 	if len(args) < 1 || strings.HasPrefix(args[0], "-") {
-		return fmt.Errorf("Verwendung: bahnnet login <server-url>")
+		return fmt.Errorf("Verwendung: bahnping login <server-url>")
 	}
 	serverURL := strings.TrimRight(args[0], "/")
 
@@ -146,7 +146,7 @@ func cmdWhoami(_ []string) error {
 		return err
 	}
 	if cfg == nil {
-		return fmt.Errorf(`nicht angemeldet, bitte zuerst "bahnnet login <server-url>" ausführen`)
+		return fmt.Errorf(`nicht angemeldet, bitte zuerst "bahnping login <server-url>" ausführen`)
 	}
 	client := apiclient.New(cfg.Server, cfg.Token)
 	ctx := context.Background()

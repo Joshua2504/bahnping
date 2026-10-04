@@ -1,4 +1,4 @@
-# Bahn-Netzwerk-Tracker – Hinweise für Claude Code
+# BahnPing (Bahn-Netzwerk-Tracker) – Hinweise für Claude Code
 
 Planung: `docs/PLANUNG.md`. API-Vertrag: `docs/API.md`. Geteilte Schemas: `packages/shared/src`.
 

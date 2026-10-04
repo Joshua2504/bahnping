@@ -28,7 +28,7 @@
 
 <div class="app-shell">
 	<nav class="app-nav">
-		<span class="app-nav__brand">Bahn-Netzwerk-Tracker</span>
+		<span class="app-nav__brand">BahnPing</span>
 		{#each links as link (link.href)}
 			<a href={link.href} class:active={page.url.pathname === link.href}>{link.label}</a>
 		{/each}

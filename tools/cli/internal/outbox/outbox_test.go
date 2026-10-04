@@ -3,7 +3,7 @@ package outbox
 import (
 	"testing"
 
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 func sampleWithID(id string) model.Sample {

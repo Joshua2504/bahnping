@@ -22,9 +22,15 @@ Mutierende Requests prüfen `Origin` bzw. `Sec-Fetch-Site` (same-origin/none erl
   `ADMIN_EMAILS` steht (ebenso bei `POST /api/auth/confirm`); die Rolle wird nie automatisch
   wieder entfernt.
 - `PATCH /api/me` Body `MeUpdate` (ALTCHA Pflicht) → `200 Me`; Name bereits vergeben → `409`.
+- `PATCH /api/me/settings` Body `MeSettingsUpdate` (`{ livePublic: boolean }`, kein ALTCHA nötig,
+  da keine Enumerations-/Spam-Gefahr) → `200 Me`. Cookie- oder Bearer-Auth. Steuert, ob laufende
+  Fahrten anonymisiert auf `/api/public/live` erscheinen (siehe dort), Standard
+  `LIVE_PUBLIC_DEFAULT` (`packages/shared/src/constants.ts`, aktuell `true`/Opt-out in der
+  Testversion; vor dem öffentlichen Start auf `false`/Opt-in umstellen).
 - `DELETE /api/me` → `204`, löscht Nutzer samt Fahrten/Samples (Cascade). Nur mit Sitzungs-Login,
   nicht mit API-Token (`403`).
 - `GET /api/me/export` → JSON `{ user, trips: [{...trip, samples: [...] }] }`.
+- `Me` enthält zusätzlich `livePublic: boolean` (siehe oben).
 
 ## API-Tokens (CLI/App)
 
@@ -61,11 +67,17 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
     `implausible_speed` (Distanz/Zeit zum letzten Sample der Fahrt > MAX_SPEED_MPS), `clock_skew`
     (korrigierte ts weicht > 24 h von Serverzeit ab). Rejected nur bei Schemafehlern einzelner Samples.
   - aktualisiert `trips.last_sample_at`.
-- `GET /api/trips/:id/samples` → `200 TripSamples` (nur eigene, sonst 404): `{ trip, samples, asns }`.
-  `samples` enthält alle Samples der Fahrt in zeitlicher Reihenfolge (reduzierte Felder, siehe
-  Schema `TripSample`), `asns` die je ASN gesehenen Samples (`asn`, `name`, `netClass`, `samples`).
+- `GET /api/trips/:id/samples?since=<ISO>` → `200 TripSamples` (nur eigene, sonst 404):
+  `{ trip, samples, asns, serverTime }`. `samples` enthält alle Samples der Fahrt in zeitlicher
+  Reihenfolge (reduzierte Felder, siehe Schema `TripSample`), `asns` die je ASN gesehenen Samples
+  (`asn`, `name`, `netClass`, `samples`, stets über die gesamte Fahrt, unabhängig von `since`).
   Jedes Sample liefert zusätzlich `iceState`/`posSource` (noch nicht Teil des `TripSample`-Schemas in
   `packages/shared`, das parallel bearbeitet wird; Web-Client erweitert lokal, siehe `apps/web/src/lib/api.ts`).
+  `serverTime` (ISO) ist die Serverzeit beim Erstellen der Antwort; der Client nutzt sie als nächsten
+  `since`-Wert für inkrementelles Nachladen einer laufenden Fahrt (siehe `/trips/[id]`, Polling alle
+  10s). `since` filtert über `samples.created_at` (nicht `ts`), damit verspätet eingetroffene Samples
+  mit älterem (korrigiertem) `ts` nicht übersprungen werden; `trip.sampleCount` zeigt dabei weiterhin
+  die Gesamtzahl der Fahrt, nicht nur den neu geladenen Ausschnitt.
 
 ## Admin (Auth + Rolle `admin` Pflicht, sonst `401`/`403`)
 - `GET /api/admin/asns?filter=unknown|all` → `200 AdminAsn[]`, sortiert nach `seen` absteigend.
@@ -90,8 +102,7 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
 - `POST /api/admin/smtp/test` Body `SmtpTestRequest` (`{ to? }`, Standard: E-Mail des aufrufenden
   Admins) → `200 SmtpTestResponse` (`{ ok: true, messageId }`) oder `502` mit verständlicher
   Fehlermeldung (Auth fehlgeschlagen, Verbindung abgelehnt, Zeitüberschreitung, Zertifikat
-  ungültig), abgeleitet aus `err.code`/`responseCode`, ohne Interna zu verraten. Limit 5 Testmails
-  je Admin pro 10 Minuten (im RAM).
+  ungültig), abgeleitet aus `err.code`/`responseCode`, ohne Interna zu verraten. Kein Rate-Limit (nur Admins).
 
 ## Netz
 - `GET /api/net/whoami` → `200 WhoamiResponse`. Client-IP aus Socket bzw. `X-Forwarded-For` (nur wenn
@@ -121,8 +132,35 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   `down/up` = Median der Speedtests (null wenn keine). Zellen mit `nTrips < PUBLIC_MIN_TRIPS` werden
   weggelassen, außer `mine=true` und eingeloggt (dann nur eigene Samples). bbox begrenzt die Zellen über
   lat/lon der Samples. Antwort `Cache-Control: public, max-age=60`.
-- `GET /api/public/stats` → `200 PublicStats`.
-- `GET /api/public/live` → `{ activeTrips }` (Fahrten mit `last_sample_at` in den letzten 5 min).
+- `GET /api/public/stats` → `200 PublicStats` (`{ totals, byNet, byIceState }`).
+  - `byIceState`: je ICE-Portal-Prognose (`connectivity.currentState`, groß geschrieben) über alle
+    `ping_window`-Samples mit gesetztem `iceState` (ohne ausgeschlossene Flags): `nSamples`, `nTrips`,
+    `availPct` (Anteil Fenster mit `n > lost`, wie bei `/cells`), `lossPct`, `rttMedian`. Sortiert
+    nach `ICE_STATE_ORDER`, unbekannte Werte am Ende. Vergleicht die Prognose der DB mit der Messung.
+- `GET /api/public/live` → `200 PublicLive` (`{ activeTrips, trains, generatedAt }`),
+  `Cache-Control: public, max-age=10`, zusätzlich serverseitiger In-Memory-Cache über `LIVE_CACHE_MS`
+  (10s), damit die 15s-Polling-Last der Live-Karte nicht pro Request neu berechnet wird.
+  - `activeTrips` zählt wie bisher alle Fahrten mit `last_sample_at` in den letzten 5 Minuten,
+    unabhängig von `livePublic`.
+  - `trains: LiveTrain[]`: je Fahrt mit `status='active'`, deren Nutzer `live_public=true` hat und
+    die ein Sample mit Position innerhalb der letzten `LIVE_POSITION_MAX_AGE_MS` (5 min) besitzt.
+    Fahrten mit gleicher Zugnummer + gleichem Zugtyp werden zu einem Eintrag zusammengefasst
+    (reine Zusammenfassung/Rundung in `apps/api/src/lib/liveTrains.ts`, per Vitest getestet):
+    - `label`: `train_type`-Label + Zugnummer (z.B. "ICE 1077"), ohne Nummer nur das Typ-Label.
+    - `lat`/`lon`: Mittel der letzten Positionen der zusammengefassten Fahrten, je auf 2
+      Nachkommastellen gerundet (~1 km Genauigkeit).
+    - `speedKmh`: Mittel der letzten `speed_mps`-Werte (sofern vorhanden) in km/h, ganzzahlig
+      gerundet, sonst `null`.
+    - `trackers`: Anzahl zusammengefasster Fahrten.
+    - `nets`: je Netzklasse Median-RTT und Verlust-% über alle `ping_window`-Samples der letzten
+      `LIVE_NET_WINDOW_MS` (2 min) der zusammengefassten Fahrten.
+    - `lastSeenSec`: Alter des frischesten Positions-Samples in Sekunden, auf 10er-Schritte gerundet.
+    - `iceState`: letzter bekannter ICE-Portal-Status der frischesten zusammengefassten Fahrt,
+      sonst der erste gefundene, sonst `null`.
+    - `key`: HMAC-SHA256 (von `APP_SECRET` abgeleiteter Schlüssel, Zweck `live-key`) über das Label
+      (bei bekannter Zugnummer) bzw. über die Fahrt-ID (sonst), base64url, auf 12 Zeichen gekürzt.
+      Dient nur als über mehrere Abrufe stabiler Client-Key, ist aber nie die Fahrt-ID selbst.
+    - Enthält absichtlich **keine** Nutzer-ID, keinen Namen, keine E-Mail und keine Fahrt-ID.
 
 ## Downloads
 - `GET /dl/<dateiname>` → CLI-Binaries aus `DOWNLOADS_DIR` (relativ zu `apps/api`, Standard

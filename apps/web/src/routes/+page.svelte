@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ApiError, api } from '#lib/api.js';
 	import { auth } from '#lib/auth.svelte.js';
+	import LiveMap from '#lib/components/LiveMap.svelte';
 
 	let email = $state('');
 	let sending = $state(false);
@@ -30,10 +31,10 @@
 </script>
 
 <svelte:head>
-	<title>Bahn-Netzwerk-Tracker</title>
+	<title>BahnPing</title>
 </svelte:head>
 
-<h1>Bahn-Netzwerk-Tracker</h1>
+<h1>BahnPing</h1>
 <p>
 	Dieses Projekt misst, wie gut das Netz in Zügen tatsächlich ist – getrennt nach DB-WLAN und
 	eigenem Mobilfunk. Während einer Fahrt werden Latenz, Paketverlust, Standort und auf Wunsch die
@@ -45,6 +46,8 @@
 	werden ausschließlich Aggregate über mehrere Fahrten hinweg, nie einzelne Positionen oder
 	Zeitstempel.
 </p>
+
+<LiveMap />
 
 {#if auth.loading}
 	<p>Lade…</p>

@@ -10,7 +10,7 @@ DIST_DIR="$ROOT/.run/dist"
 mkdir -p "$DIST_DIR"
 
 VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
-echo "Baue bahnnet $VERSION ..."
+echo "Baue bahnping $VERSION ..."
 
 cd "$CLI_DIR"
 go vet ./...
@@ -23,13 +23,13 @@ build() {
     -trimpath \
     -ldflags "-s -w -X main.version=$VERSION" \
     -o "$DIST_DIR/$out" \
-    ./cmd/bahnnet
+    ./cmd/bahnping
 }
 
-build darwin arm64 bahnnet-darwin-arm64
-build darwin amd64 bahnnet-darwin-amd64
-build linux  amd64 bahnnet-linux-amd64
-build linux  arm64 bahnnet-linux-arm64
+build darwin arm64 bahnping-darwin-arm64
+build darwin amd64 bahnping-darwin-amd64
+build linux  amd64 bahnping-linux-amd64
+build linux  arm64 bahnping-linux-arm64
 
 cd "$ROOT"
 echo "Fertig: $DIST_DIR"

@@ -1,23 +1,32 @@
 <script lang="ts">
 	// Fahrtdetail: Kopf, Kennzahlen, Netzliste, Karte der Strecke (eingefärbt nach RTT) und
-	// Zeitverlauf (RTT/Verlust). Nutzt dieselbe Basemap wie `/map` (siehe #lib/map/basemap.js).
+	// Zeitverlauf (RTT/Verlust/Geschwindigkeit). Nutzt dieselbe Basemap wie `/map` (siehe
+	// #lib/map/basemap.js). Bei laufender Fahrt (status 'active') wird alle LIVE_POLL_MS inkrementell
+	// nachgeladen (nur bei sichtbarem Tab), bis die Fahrt endet.
 	import { onDestroy, onMount } from 'svelte';
 	import { page } from '$app/state';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import uPlot from 'uplot';
 	import 'uplot/dist/uPlot.min.css';
-	import { NET_CLASS_LABELS, TRAIN_TYPE_LABELS } from '@bahn/shared';
+	import { ICE_STATE_LABELS, NET_CLASS_LABELS, TRAIN_TYPE_LABELS } from '@bahn/shared';
 	import { ApiError, api, type TripSampleExt, type TripSamplesExt } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { rttColorExpression } from '#lib/map/colors.js';
 	import { median, percentile } from '#lib/tracker/util.js';
 
 	const tripId = page.params.id as string;
+	const LIVE_POLL_MS = 10_000;
 
 	let data = $state<TripSamplesExt | null>(null);
 	let loadError = $state<string | null>(null);
 	let flagsOpen = $state(false);
+	/** Karte folgt der letzten Position einer laufenden Fahrt; aus bei manuellem Ziehen. */
+	let follow = $state(true);
+	/** Aktualisiert sich jede Sekunde, damit "vor X s" ohne erneuten Request mitläuft. */
+	let nowTick = $state(Date.now());
+	let livePollTimer: ReturnType<typeof setInterval> | null = null;
+	let tickTimer: ReturnType<typeof setInterval> | null = null;
 
 	let mapContainer: HTMLDivElement | undefined = $state(undefined);
 	let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -34,6 +43,70 @@
 			loadError = err instanceof ApiError ? (err.detail ?? err.title) : 'Fahrt konnte nicht geladen werden';
 		}
 	}
+
+	/** Lädt nur Samples seit der letzten Serverzeit nach und hängt sie an (inkrementell, für LIVE). */
+	async function loadIncremental(): Promise<void> {
+		if (!data) return;
+		try {
+			const res = await api.getTripSamples(tripId, data.serverTime);
+			const known = new Set(data.samples.map((s) => s.id));
+			const merged = [...data.samples, ...res.samples.filter((s) => !known.has(s.id))];
+			merged.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+			data = { trip: res.trip, samples: merged, asns: res.asns, serverTime: res.serverTime };
+			loadError = null;
+		} catch (err) {
+			// Live-Nachladen schlägt leise fehl (z.B. kurzer Netzwerkhänger); Anzeige bleibt auf altem Stand.
+			loadError = err instanceof ApiError ? (err.detail ?? err.title) : loadError;
+		}
+		if (data.trip.status !== 'active') stopLivePolling();
+	}
+
+	function startLivePolling(): void {
+		if (livePollTimer || !data || data.trip.status !== 'active') return;
+		livePollTimer = setInterval(() => {
+			if (document.visibilityState === 'visible') void loadIncremental();
+		}, LIVE_POLL_MS);
+		if (!tickTimer) tickTimer = setInterval(() => (nowTick = Date.now()), 1000);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
+	}
+
+	function stopLivePolling(): void {
+		if (livePollTimer) {
+			clearInterval(livePollTimer);
+			livePollTimer = null;
+		}
+		if (tickTimer) {
+			clearInterval(tickTimer);
+			tickTimer = null;
+		}
+		document.removeEventListener('visibilitychange', handleVisibilityChange);
+	}
+
+	function handleVisibilityChange(): void {
+		if (document.visibilityState === 'visible') void loadIncremental();
+	}
+
+	const lastSample = $derived.by(() => {
+		const samples = data?.samples ?? [];
+		return samples.length > 0 ? samples[samples.length - 1] : null;
+	});
+	const currentSpeedKmh = $derived.by(() => {
+		for (let i = (data?.samples.length ?? 0) - 1; i >= 0; i -= 1) {
+			const s = data!.samples[i];
+			if (s.speedMps !== null) return s.speedMps * 3.6;
+		}
+		return null;
+	});
+	const currentIceState = $derived.by(() => {
+		for (let i = (data?.samples.length ?? 0) - 1; i >= 0; i -= 1) {
+			const s = data!.samples[i];
+			if (s.iceState) return s.iceState;
+		}
+		return null;
+	});
+	const lastSeenSecLive = $derived(
+		lastSample ? Math.max(0, Math.round((nowTick - new Date(lastSample.ts).getTime()) / 1000)) : null,
+	);
 
 	function fmt(value: number | null, digits = 0, suffix = ''): string {
 		return value === null ? '–' : `${value.toFixed(digits)}${suffix}`;
@@ -80,14 +153,6 @@
 		}
 		return out;
 	});
-	const ICE_STATE_LABELS: Record<string, string> = {
-		HIGH: 'gut',
-		MIDDLE: 'mittel',
-		LOW: 'schwach',
-		UNSTABLE: 'instabil',
-		NO_INFO: 'keine Info',
-	};
-
 	function pointGeoJson() {
 		const samples = (data?.samples ?? []).filter((s) => s.lat !== null && s.lon !== null);
 		return {
@@ -99,6 +164,7 @@
 					ts: s.ts,
 					rtt: s.rttMedian,
 					loss: s.n !== null && s.n !== null && s.n! > 0 ? (100 * (s.lost ?? 0)) / (s.n ?? 1) : null,
+					speedKmh: s.speedMps !== null ? s.speedMps * 3.6 : null,
 					netClass: s.netClass,
 					asn: s.asn,
 					kind: s.kind,
@@ -172,6 +238,7 @@
 		m.on('load', () => {
 			fitToRoute();
 		});
+		m.on('dragstart', () => (follow = false));
 		m.on('click', 'route-points', (e) => {
 			const f = e.features?.[0];
 			if (!f) return;
@@ -180,6 +247,7 @@
 				<strong>${new Date(p.ts as string).toLocaleTimeString('de-DE')}</strong><br />
 				RTT: ${p.rtt ?? '–'} ms<br />
 				Verlust: ${p.loss !== null && p.loss !== undefined ? Number(p.loss).toFixed(0) : '–'} %<br />
+				Geschwindigkeit: ${p.speedKmh !== null && p.speedKmh !== undefined ? Number(p.speedKmh).toFixed(0) : '–'} km/h<br />
 				Netz: ${p.asn ? `AS${p.asn} · ` : ''}${NET_CLASS_LABELS[p.netClass as keyof typeof NET_CLASS_LABELS] ?? p.netClass}
 			`;
 			popup?.remove();
@@ -189,12 +257,23 @@
 		m.on('mouseleave', 'route-points', () => (m.getCanvas().style.cursor = ''));
 	}
 
+	/** Aktualisiert die Streckenpunkte einer bereits erzeugten Karte (nach inkrementellem Nachladen). */
+	function updateRoute(): void {
+		if (!map) return;
+		const source = map.getSource('route');
+		if (source && source.type === 'geojson') (source as maplibregl.GeoJSONSource).setData(pointGeoJson());
+		if (follow && lastSample && lastSample.lat !== null && lastSample.lon !== null) {
+			map.easeTo({ center: [lastSample.lon, lastSample.lat], duration: 400 });
+		}
+	}
+
 	function setupChart(): void {
 		if (!chartContainer || pingSamples.length === 0) return;
 		const t = pingSamples.map((s) => new Date(s.ts).getTime() / 1000);
 		const rttMed = pingSamples.map((s) => s.rttMedian);
 		const rttP90 = pingSamples.map((s) => s.rttP90);
 		const loss = pingSamples.map((s) => (s.n ? (100 * (s.lost ?? 0)) / s.n : null));
+		const speedKmh = pingSamples.map((s) => (s.speedMps !== null ? s.speedMps * 3.6 : null));
 
 		chart?.destroy();
 		chart = new uPlot(
@@ -202,26 +281,40 @@
 				width: chartContainer.clientWidth || 600,
 				height: 220,
 				padding: [8, 8, 0, 8],
-				scales: { y: { range: [0, null] }, loss: { range: [0, 100] } },
-				axes: [{}, { scale: 'y', label: 'RTT (ms)' }, { scale: 'loss', side: 1, label: 'Verlust (%)' }],
+				scales: { y: { range: [0, null] }, loss: { range: [0, 100] }, speed: { range: [0, null] } },
+				axes: [
+					{},
+					{ scale: 'y', label: 'RTT (ms)' },
+					{ scale: 'loss', side: 1, label: 'Verlust (%)' },
+					{ scale: 'speed', side: 1, label: 'km/h' },
+				],
 				series: [
 					{},
 					{ label: 'RTT Median', stroke: '#4ade80', width: 2, scale: 'y', points: { show: false } },
 					{ label: 'RTT p90', stroke: '#fbbf24', width: 1.5, scale: 'y', points: { show: false } },
 					{ label: 'Verlust', stroke: '#f87171', width: 1, scale: 'loss', points: { show: false } },
+					{ label: 'Geschwindigkeit', stroke: '#38bdf8', width: 1.5, scale: 'speed', points: { show: false } },
 				],
 			},
-			[t, rttMed, rttP90, loss] as uPlot.AlignedData,
+			[t, rttMed, rttP90, loss, speedKmh] as uPlot.AlignedData,
 			chartContainer,
 		);
 	}
 
 	onMount(() => {
-		void load();
+		void load().then(() => {
+			if (data?.trip.status === 'active') startLivePolling();
+		});
 	});
 
 	$effect(() => {
 		if (data && mapContainer && !map) setupMap();
+	});
+
+	// Nach dem ersten Aufbau: neue Samples (z.B. durch Live-Nachladen) in die bestehende Karte übernehmen.
+	$effect(() => {
+		void data?.samples.length;
+		if (map) updateRoute();
 	});
 
 	$effect(() => {
@@ -229,6 +322,7 @@
 	});
 
 	onDestroy(() => {
+		stopLivePolling();
 		map?.remove();
 		chart?.destroy();
 	});
@@ -246,7 +340,36 @@
 	<h1>
 		{TRAIN_TYPE_LABELS[data.trip.trainType]}
 		{data.trip.trainNumber ?? ''}
+		{#if data.trip.status === 'active'}<span class="live-badge">LIVE</span>{/if}
 	</h1>
+
+	{#if data.trip.status === 'active'}
+		<div class="card">
+			<div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))">
+				<div class="stat">
+					<div class="stat__label">Geschwindigkeit</div>
+					<div class="stat__value">{currentSpeedKmh !== null ? `${currentSpeedKmh.toFixed(0)} km/h` : '–'}</div>
+				</div>
+				<div class="stat">
+					<div class="stat__label">ICE-Status</div>
+					<div class="stat__value" style="font-size: 1.1rem">
+						{currentIceState ? ICE_STATE_LABELS[currentIceState] ?? currentIceState : '–'}
+					</div>
+				</div>
+				<div class="stat">
+					<div class="stat__label">Netz</div>
+					<div class="stat__value" style="font-size: 1.1rem">
+						{lastSample ? NET_CLASS_LABELS[lastSample.netClass] : '–'}
+					</div>
+				</div>
+				<div class="stat">
+					<div class="stat__label">Letzte Messung</div>
+					<div class="stat__value">{lastSeenSecLive !== null ? `vor ${lastSeenSecLive} s` : '–'}</div>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<div class="card">
 		<div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))">
 			<div class="stat">
@@ -345,6 +468,12 @@
 	{/if}
 
 	<div class="card" style="padding: 0; overflow: hidden">
+		{#if data.trip.status === 'active'}
+			<label style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.6rem 1rem 0">
+				<input type="checkbox" bind:checked={follow} style="width: auto; min-height: auto" />
+				Folgen
+			</label>
+		{/if}
 		<div bind:this={mapContainer} style="width: 100%; height: 60vh; min-height: 320px"></div>
 	</div>
 

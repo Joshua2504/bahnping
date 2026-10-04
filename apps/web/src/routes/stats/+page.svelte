@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Öffentliche Statistikseite: Gesamtzahlen + Kennzahlen je Netzklasse, aus /api/public/stats.
 	import { onMount } from 'svelte';
-	import { NET_CLASS_LABELS, type PublicStats } from '@bahn/shared';
+	import { ICE_STATE_LABELS, NET_CLASS_LABELS, type PublicStats } from '@bahn/shared';
 	import { ApiError, api } from '#lib/api.js';
 
 	let data = $state<PublicStats | null>(null);
@@ -92,6 +92,45 @@
 					</tbody>
 				</table>
 			</div>
+		{/if}
+	</div>
+
+	<div class="card">
+		<h2>Bordportal-Prognose vs. Messung</h2>
+		<p>
+			Das ICE-Portal zeigt für jeden Streckenabschnitt eine Netzprognose der DB. Das ist keine Messung. Hier steht, wie
+			die Verbindung bei der jeweiligen Prognose tatsächlich war (nur Fahrten mit CLI/App, die das Bordportal auslesen).
+		</p>
+		{#if data.byIceState.length === 0}
+			<p>Noch keine Daten vorhanden.</p>
+		{:else}
+			<div style="overflow-x: auto">
+				<table>
+					<thead>
+						<tr>
+							<th>Prognose</th>
+							<th>Verfügbarkeit</th>
+							<th>Verlust</th>
+							<th>Latenz (Median)</th>
+							<th>Fahrten</th>
+							<th>Messfenster</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.byIceState as row (row.iceState)}
+							<tr>
+								<td>{ICE_STATE_LABELS[row.iceState] ?? row.iceState}</td>
+								<td>{fmt(row.availPct, 0, ' %')}</td>
+								<td>{fmt(row.lossPct, 1, ' %')}</td>
+								<td>{fmt(row.rttMedian, 0, ' ms')}</td>
+								<td>{row.nTrips}</td>
+								<td>{row.nSamples}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			<p>Verfügbarkeit: Anteil der 10-Sekunden-Messfenster mit mindestens einer Ping-Antwort.</p>
 		{/if}
 	</div>
 

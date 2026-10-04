@@ -1,9 +1,10 @@
 <script lang="ts">
 	// Fahrt-Modus: Herzstück der App. Login nötig; vor dem Start Zugtyp/Nummer wählen,
 	// während der Fahrt Vollbild-Dark-Layout mit Live-Zahlen (siehe PLANUNG.md 6.9).
-	import { TRAIN_TYPE_LABELS, TRAIN_TYPES, type TrainType } from '@bahn/shared';
+	import { TRAIN_TYPE_LABELS, TRAIN_TYPES, type TrainType, type Trip } from '@bahn/shared';
 	import Sparkline from '#lib/components/Sparkline.svelte';
 	import TrackMap from '#lib/components/TrackMap.svelte';
+	import { api } from '#lib/api.js';
 	import { auth } from '#lib/auth.svelte.js';
 	import { tracker } from '#lib/tracker/tracker.svelte.js';
 
@@ -12,7 +13,27 @@
 	let starting = $state(false);
 	let startError = $state<string | null>(null);
 
+	/** Aktive Fahrt desselben Nutzers auf einem anderen Gerät (z.B. CLI), siehe `otherDeviceTrip`. */
+	let otherDeviceTrip = $state<Trip | null>(null);
+
 	const insecure = typeof window !== 'undefined' && !window.isSecureContext;
+
+	// Läuft im Browser gerade keine eigene Fahrt und auch keine lokal fortsetzbare, aber der Server
+	// kennt eine aktive Fahrt (z.B. von der CLI) -> Hinweis mit Link zur Live-Ansicht.
+	$effect(() => {
+		if (!auth.me || tracker.active || tracker.resumeAvailable) {
+			otherDeviceTrip = null;
+			return;
+		}
+		void (async () => {
+			try {
+				const trips = await api.listTrips();
+				otherDeviceTrip = trips.find((t) => t.status === 'active') ?? null;
+			} catch {
+				otherDeviceTrip = null;
+			}
+		})();
+	});
 
 	async function handleStart(): Promise<void> {
 		starting = true;
@@ -186,6 +207,17 @@
 	{#if tracker.lastEndedTripId}
 		<div class="notice success">
 			Fahrt beendet. <a href={`/trips/${tracker.lastEndedTripId}`}>Fahrt ansehen</a>
+		</div>
+	{/if}
+
+	{#if otherDeviceTrip}
+		<div class="notice warn">
+			Du hast eine laufende Fahrt auf einem anderen Gerät ({otherDeviceTrip.platform}, {TRAIN_TYPE_LABELS[
+				otherDeviceTrip.trainType
+			]}{otherDeviceTrip.trainNumber ? ` ${otherDeviceTrip.trainNumber}` : ''}).
+			<div class="track-actions" style="margin-top: 0.5rem">
+				<a class="btn" href={`/trips/${otherDeviceTrip.id}`}>Live ansehen</a>
+			</div>
 		</div>
 	{/if}
 

@@ -26,3 +26,32 @@ export const SESSION_TTL_MS = 90 * 24 * 60 * 60_000;
 /** Grobe Plausibilitäts-Box: Deutschland und Nachbarländer. */
 export const BBOX = { west: 2.0, south: 44.5, east: 20.0, north: 57.0 } as const;
 export const MAX_SPEED_MPS = 350 / 3.6;
+
+/**
+ * Standardwert für `users.live_public` (Einstellung „Live öffentlich“, siehe `/account`).
+ * In der Testversion `true` (Opt-out), damit die Live-Karte auf der Startseite ohne manuelles
+ * Zutun Daten zeigt. VOR dem öffentlichen Start auf `false` umstellen (Opt-in) – die DB-Spalte
+ * muss dann denselben Default bekommen (neue Migration).
+ */
+export const LIVE_PUBLIC_DEFAULT = true;
+/** Nur Fahrten mit einem Sample (mit Position) innerhalb dieses Zeitraums gelten als „live“. */
+export const LIVE_POSITION_MAX_AGE_MS = 5 * 60_000;
+/** Zeitfenster für die zusammengefasste RTT/Verlust-Anzeige je Netzklasse auf `/api/public/live`. */
+export const LIVE_NET_WINDOW_MS = 2 * 60_000;
+/** Cache-Dauer der In-Memory-Antwort von `/api/public/live`. */
+export const LIVE_CACHE_MS = 10_000;
+/**
+ * Anzeigenamen für `connectivity.currentState` des ICE-Bordportals. Das ist keine Messung, sondern
+ * die Abdeckungsprognose der DB für den aktuellen Streckenabschnitt. Unbekannte Werte roh anzeigen.
+ */
+export const ICE_STATE_LABELS: Record<string, string> = {
+  HIGH: 'gut',
+  MIDDLE: 'mittel',
+  WEAK: 'schwach',
+  LOW: 'schwach',
+  UNSTABLE: 'instabil',
+  NO_INTERNET: 'Funkloch',
+  NO_INFO: 'keine Info',
+};
+/** Reihenfolge der Prognosestufen für Tabellen, von gut nach schlecht. */
+export const ICE_STATE_ORDER = ['HIGH', 'MIDDLE', 'WEAK', 'LOW', 'UNSTABLE', 'NO_INTERNET', 'NO_INFO'] as const;

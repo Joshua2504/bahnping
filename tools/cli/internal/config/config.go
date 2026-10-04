@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Config ist der Inhalt von config.json.
@@ -14,16 +15,16 @@ type Config struct {
 	Token  string `json:"token"`
 }
 
-// Dir liefert $XDG_CONFIG_HOME/bahnnet bzw. ~/.config/bahnnet.
+// Dir liefert $XDG_CONFIG_HOME/bahnping bzw. ~/.config/bahnping.
 func Dir() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "bahnnet"), nil
+		return filepath.Join(xdg, "bahnping"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("Home-Verzeichnis nicht ermittelbar: %w", err)
 	}
-	return filepath.Join(home, ".config", "bahnnet"), nil
+	return filepath.Join(home, ".config", "bahnping"), nil
 }
 
 // Path liefert den vollen Pfad zu config.json.
@@ -36,7 +37,34 @@ func Path() (string, error) {
 }
 
 // Load liest die Konfiguration. Existiert die Datei nicht, wird (nil, nil) zurückgegeben.
+// legacyName ist der frühere Name der CLI; Konfiguration und Puffer werden einmalig übernommen.
+const legacyName = "bahnnet"
+
+// migrateLegacyDir benennt ein altes Verzeichnis (…/bahnnet) in das neue (…/bahnping) um,
+// sofern das neue noch nicht existiert.
+func migrateLegacyDir(newDir string) {
+	oldDir := filepath.Join(filepath.Dir(newDir), legacyName)
+	if _, err := os.Stat(newDir); err == nil {
+		return
+	}
+	if _, err := os.Stat(oldDir); err != nil {
+		return
+	}
+	_ = os.Rename(oldDir, newDir)
+}
+
+// legacyServers werden beim Laden auf die neue Adresse umgeschrieben.
+var legacyServers = map[string]string{
+	"https://bahnnet.treudler.net": "https://bahnping.treudler.net",
+}
+
 func Load() (*Config, error) {
+	if dir, err := Dir(); err == nil {
+		migrateLegacyDir(dir)
+	}
+	if dir, err := StateDir(); err == nil {
+		migrateLegacyDir(dir)
+	}
 	path, err := Path()
 	if err != nil {
 		return nil, err
@@ -51,6 +79,10 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("Konfiguration ist beschädigt (%s): %w", path, err)
+	}
+	if newURL, ok := legacyServers[strings.TrimRight(cfg.Server, "/")]; ok {
+		cfg.Server = newURL
+		_ = Save(&cfg)
 	}
 	return &cfg, nil
 }
@@ -94,11 +126,11 @@ func Remove() error {
 // StateDir liefert das Verzeichnis für Laufzeitdaten (Outbox), analog XDG_STATE_HOME.
 func StateDir() (string, error) {
 	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "bahnnet"), nil
+		return filepath.Join(xdg, "bahnping"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("Home-Verzeichnis nicht ermittelbar: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "bahnnet"), nil
+	return filepath.Join(home, ".local", "state", "bahnping"), nil
 }

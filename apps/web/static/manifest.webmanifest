@@ -1,6 +1,6 @@
 {
-	"name": "Bahn-Netzwerk-Tracker",
-	"short_name": "Bahn-Tracker",
+	"name": "BahnPing",
+	"short_name": "BahnPing",
 	"description": "Misst Netzqualität in Zügen (DB-WLAN und Mobilfunk) und zeigt die Ergebnisse als öffentliche Heatmap.",
 	"start_url": "/",
 	"scope": "/",

@@ -6,22 +6,6 @@ import { loadSmtpSettings, saveSmtpSettings, type StoredSmtpSettings } from '../
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 
-const TEST_MAIL_WINDOW_MS = 10 * 60_000;
-const TEST_MAIL_MAX = 5;
-/** userId -> Zeitstempel der letzten Testmail-Versuche, nur im RAM. */
-const testMailLog = new Map<string, number[]>();
-
-function allowTestMail(userId: string): boolean {
-  const now = Date.now();
-  const recent = (testMailLog.get(userId) ?? []).filter((t) => now - t < TEST_MAIL_WINDOW_MS);
-  if (recent.length >= TEST_MAIL_MAX) {
-    testMailLog.set(userId, recent);
-    return false;
-  }
-  recent.push(now);
-  testMailLog.set(userId, recent);
-  return true;
-}
 
 function toSmtpSettings(stored: StoredSmtpSettings | null, envDefaults: { host: string; port: number; from: string }): SmtpSettings {
   return {
@@ -173,10 +157,7 @@ export function registerAdminRoutes(app: FastifyInstance): void {
     const body = parseOrProblem(SmtpTestRequest, request.body ?? {}, reply);
     if (!body) return;
 
-    if (!allowTestMail(request.userId!)) {
-      sendProblem(reply, 429, 'Zu viele Testmails', { detail: 'Höchstens 5 Testmails je 10 Minuten.' });
-      return;
-    }
+    // Bewusst ohne Rate-Limit: Der Endpunkt ist nur für Admins erreichbar.
 
     let to = body.to;
     if (!to) {
@@ -193,9 +174,9 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       await mail.getTransporter().verify();
       const { messageId } = await mail.send({
         to,
-        subject: 'Testmail – Bahn-Netzwerk-Tracker',
-        text: 'Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des Bahn-Netzwerk-Trackers.\n\nWenn du diese Mail erhalten hast, funktioniert der Mailversand.',
-        html: '<p>Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des Bahn-Netzwerk-Trackers.</p><p>Wenn du diese Mail erhalten hast, funktioniert der Mailversand.</p>',
+        subject: 'Testmail – BahnPing',
+        text: 'Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des BahnPing.\n\nWenn du diese Mail erhalten hast, funktioniert der Mailversand.',
+        html: '<p>Dies ist eine Testmail zur Überprüfung der SMTP-Konfiguration des BahnPing.</p><p>Wenn du diese Mail erhalten hast, funktioniert der Mailversand.</p>',
       });
       reply.send({ ok: true, messageId });
     } catch (err) {

@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 // Outbox verwaltet die Datei outbox-<tripId>.jsonl in einem Zustandsverzeichnis.

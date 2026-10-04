@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 // Client ist ein einfacher REST-Client für die bahn-netzwerk-tracker-API.

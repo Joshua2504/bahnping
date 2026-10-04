@@ -337,7 +337,7 @@ func (c *Client) getDirect(ctx context.Context, path string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnnet")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnping")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err

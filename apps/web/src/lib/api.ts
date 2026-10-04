@@ -10,9 +10,11 @@ import {
 	CellsResponse,
 	ConfirmRequest,
 	Me,
+	MeSettingsUpdate,
 	MeUpdate,
 	MagicLinkRequest,
 	Problem,
+	PublicLive,
 	PublicStats,
 	Sample,
 	SampleBatchResponse,
@@ -35,6 +37,7 @@ import {
 type MagicLinkRequestBody = z.infer<typeof MagicLinkRequest>;
 type ConfirmRequestBody = z.infer<typeof ConfirmRequest>;
 type MeUpdateBody = z.infer<typeof MeUpdate>;
+type MeSettingsUpdateBody = z.infer<typeof MeSettingsUpdate>;
 type TripEndBody = z.infer<typeof TripEnd>;
 type TripUpdateBody = z.infer<typeof TripUpdate>;
 type ApiTokenCreateBody = z.infer<typeof ApiTokenCreate>;
@@ -110,6 +113,7 @@ export const api = {
 
 	me: () => request('/api/me', {}, Me),
 	updateMe: (body: MeUpdateBody) => request('/api/me', withBody('PATCH', body), Me),
+	updateMeSettings: (body: MeSettingsUpdateBody) => request('/api/me/settings', withBody('PATCH', body), Me),
 	deleteMe: () => request<void>('/api/me', withBody('DELETE')),
 	exportUrl: () => '/api/me/export',
 
@@ -117,7 +121,8 @@ export const api = {
 	listTrips: () => request('/api/trips', {}, z.array(Trip)),
 	getTrip: (id: string) => request(`/api/trips/${id}`, {}, Trip),
 	updateTrip: (id: string, body: TripUpdateBody) => request(`/api/trips/${id}`, withBody('PATCH', body), Trip),
-	getTripSamples: (id: string) => request(`/api/trips/${id}/samples`, {}, TripSamples),
+	getTripSamples: (id: string, since?: string) =>
+		request(`/api/trips/${id}/samples${since ? `?since=${encodeURIComponent(since)}` : ''}`, {}, TripSamples),
 	endTrip: (id: string, body: TripEndBody) => request(`/api/trips/${id}/end`, withBody('POST', body), Trip),
 	uploadSamples: (id: string, samples: Sample[]) =>
 		request(`/api/trips/${id}/samples`, withBody('POST', { samples }), SampleBatchResponse),
@@ -141,7 +146,7 @@ export const api = {
 		return request(`/api/public/cells?${params.toString()}`, {}, CellsResponse);
 	},
 	publicStats: () => request('/api/public/stats', {}, PublicStats),
-	publicLive: () => request('/api/public/live', {}, z.object({ activeTrips: z.number().int() })),
+	publicLive: () => request('/api/public/live', {}, PublicLive),
 
 	adminAsns: (filter: 'unknown' | 'all') =>
 		request(`/api/admin/asns?filter=${filter}`, {}, z.array(AdminAsn)),

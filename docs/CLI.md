@@ -1,22 +1,26 @@
-# bahnnet – Companion-CLI
+# bahnping – Companion-CLI
+
+> **Umbenennung:** Die CLI hieß früher `bahnnet`. Beim ersten Start übernimmt `bahnping` die alte
+> Konfiguration (`~/.config/bahnnet`) und gepufferte Messungen (`~/.local/state/bahnnet`) automatisch und
+> stellt die Serveradresse von `bahnnet.treudler.net` auf `bahnping.treudler.net` um.
 
 Go-Kommandozeilenwerkzeug für Laptops ohne GPS im Zug (siehe PLANUNG.md Kapitel 3 und 6.6).
 Es misst dasselbe wie der Browser-Client (Ping-Fenster, Speedtest, `whoami`/`probe`) und sendet
 exakt dieselben Payloads (`packages/shared/src/schemas.ts`), ergänzt die Position aber – falls
 erreichbar – über die inoffizielle ICE-Portal-API (`https://iceportal.de`, nur im WIFIonICE).
 
-Quellcode: `tools/cli` (eigenes Go-Modul `github.com/treudler/bahnnet-cli`, Go 1.27).
+Quellcode: `tools/cli` (eigenes Go-Modul `github.com/treudler/bahnping-cli`, Go 1.27).
 Build: `scripts/build-cli.sh` (siehe unten).
 
 ## Installation
 
-Vorgebaute Binaries liegen unter `/dl/bahnnet-<os>-<arch>` auf dem Server (z.B.
-`bahnnet-darwin-arm64` für Apple-Silicon-Macs, `bahnnet-darwin-amd64` für Intel-Macs,
-`bahnnet-linux-amd64`/`bahnnet-linux-arm64` für Linux).
+Vorgebaute Binaries liegen unter `/dl/bahnping-<os>-<arch>` auf dem Server (z.B.
+`bahnping-darwin-arm64` für Apple-Silicon-Macs, `bahnping-darwin-amd64` für Intel-Macs,
+`bahnping-linux-amd64`/`bahnping-linux-arm64` für Linux).
 
 ```sh
-curl -fsSL https://<dein-server>/dl/bahnnet-darwin-arm64 -o bahnnet
-chmod +x bahnnet
+curl -fsSL https://<dein-server>/dl/bahnping-darwin-arm64 -o bahnping
+chmod +x bahnping
 ```
 
 **macOS-Quarantäne:** Bitte nicht über einen Browser herunterladen – macOS markiert so
@@ -25,11 +29,11 @@ verweigert die Ausführung. Der `curl`-Weg oben setzt dieses Attribut nicht. Fal
 trotzdem blockiert wird (z.B. weil sie über AirDrop/Browser kam):
 
 ```sh
-xattr -d com.apple.quarantine bahnnet
+xattr -d com.apple.quarantine bahnping
 ```
 
-Danach `./bahnnet version` zum Test, und am besten ins `PATH` legen, z.B.
-`mv bahnnet /usr/local/bin/bahnnet` oder `~/bin/bahnnet`.
+Danach `./bahnping version` zum Test, und am besten ins `PATH` legen, z.B.
+`mv bahnping /usr/local/bin/bahnping` oder `~/bin/bahnping`.
 
 ## Anmeldung
 
@@ -38,23 +42,23 @@ Danach `./bahnnet version` zum Test, und am besten ins `PATH` legen, z.B.
 2. In der CLI anmelden:
 
 ```sh
-bahnnet login https://<dein-server>
+bahnping login https://<dein-server>
 # API-Token: <hier das bnt_...-Token einfügen, wird nicht angezeigt>
 ```
 
 Die Konfiguration (Server-URL + Token) liegt danach unter
-`$XDG_CONFIG_HOME/bahnnet/config.json` bzw. `~/.config/bahnnet/config.json` mit Zugriffsrechten
+`$XDG_CONFIG_HOME/bahnping/config.json` bzw. `~/.config/bahnping/config.json` mit Zugriffsrechten
 `0600`.
 
 ```sh
-bahnnet whoami   # Konto- und Netzinformationen (ASN, AS-Name, Netzklasse, IP-Version)
-bahnnet logout   # Lokale Anmeldung entfernen
+bahnping whoami   # Konto- und Netzinformationen (ASN, AS-Name, Netzklasse, IP-Version)
+bahnping logout   # Lokale Anmeldung entfernen
 ```
 
 ## Fahrt starten
 
 ```sh
-bahnnet track
+bahnping track
 ```
 
 Optionen:
@@ -91,9 +95,9 @@ In der Live-Ansicht:
   je 8 s, erste Sekunde verworfen.
 
 Alle Messungen werden zunächst in eine lokale Datei
-(`~/.local/state/bahnnet/outbox-<fahrt-id>.jsonl`) geschrieben und von dort in Batches
+(`~/.local/state/bahnping/outbox-<fahrt-id>.jsonl`) geschrieben und von dort in Batches
 (≤ 500 Zeilen, alle 30 s oder ab 100 gepufferten Einträgen) hochgeladen. Bricht die CLI ab
-(Absturz, Verbindungsabbruch, Akku leer), sendet der nächste `bahnnet track`-Lauf übrig
+(Absturz, Verbindungsabbruch, Akku leer), sendet der nächste `bahnping track`-Lauf übrig
 gebliebene Dateien automatisch nach.
 
 ## Grenzen
@@ -117,10 +121,10 @@ scripts/build-cli.sh
 Baut `CGO_ENABLED=0`, `-trimpath`, `-ldflags "-s -w -X main.version=<git describe>"` nach
 `.run/dist/`:
 
-- `bahnnet-darwin-arm64`
-- `bahnnet-darwin-amd64`
-- `bahnnet-linux-amd64`
-- `bahnnet-linux-arm64`
+- `bahnping-darwin-arm64`
+- `bahnping-darwin-amd64`
+- `bahnping-linux-amd64`
+- `bahnping-linux-arm64`
 
 Das Skript führt vorher `go vet`/`go test` über `tools/cli` aus. `.run/dist/` wird später unter
 `/dl/` ausgeliefert (Caddy, statisches Verzeichnis).
@@ -142,5 +146,5 @@ Für einen Integrationstest gegen eine laufende API (`scripts/dev-up.sh`) und ei
 ICE-Portal-Mock:
 
 ```sh
-go run ./cmd/bahnnet track --iceportal-url http://127.0.0.1:<mock-port> --plain --debug
+go run ./cmd/bahnping track --iceportal-url http://127.0.0.1:<mock-port> --plain --debug
 ```

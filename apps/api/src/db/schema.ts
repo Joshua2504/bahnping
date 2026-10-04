@@ -22,6 +22,13 @@ export const users = pgTable('users', {
   displayName: text('display_name').unique(),
   role: text('role').notNull().default('user'),
   leaderboardOptIn: boolean('leaderboard_opt_in').notNull().default(false),
+  /**
+   * Laufende Fahrten anonymisiert auf der öffentlichen Live-Karte zeigen, siehe `/account`. Default
+   * muss zu `LIVE_PUBLIC_DEFAULT` in `packages/shared/src/constants.ts` passen (dort umschalten,
+   * wenn vor dem öffentlichen Start auf Opt-in gewechselt wird; drizzle-kit kann wegen des
+   * ESM-`exports`-Felds von `@bahn/shared` hier nicht direkt importieren).
+   */
+  livePublic: boolean('live_public').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 });

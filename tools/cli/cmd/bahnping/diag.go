@@ -45,7 +45,7 @@ func cmdDiag(_ []string) error {
 	for _, u := range urls {
 		req, _ := http.NewRequest(http.MethodGet, u, nil)
 		req.Header.Set("Accept", "application/json, text/html;q=0.9")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnnet")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) bahnping")
 		start := time.Now()
 		resp, err := client.Do(req)
 		if err != nil {

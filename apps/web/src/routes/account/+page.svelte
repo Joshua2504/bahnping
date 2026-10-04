@@ -18,6 +18,9 @@
 	let deleteError = $state<string | null>(null);
 	let loggingOutAll = $state(false);
 
+	let livePublicSaving = $state(false);
+	let livePublicError = $state<string | null>(null);
+
 	let tokens = $state<ApiTokenInfo[] | null>(null);
 	let tokensError = $state<string | null>(null);
 	let tokenForm: HTMLFormElement | undefined = $state(undefined);
@@ -157,6 +160,20 @@
 				return 'markiert';
 		}
 	}
+
+	async function toggleLivePublic(e: Event): Promise<void> {
+		const checked = (e.target as HTMLInputElement).checked;
+		livePublicSaving = true;
+		livePublicError = null;
+		try {
+			const updated = await api.updateMeSettings({ livePublic: checked });
+			auth.me = updated;
+		} catch (err) {
+			livePublicError = err instanceof ApiError ? (err.detail ?? err.title) : 'Einstellung konnte nicht gespeichert werden';
+		} finally {
+			livePublicSaving = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -190,6 +207,26 @@
 	</form>
 
 	<div class="card">
+		<h2>Live öffentlich</h2>
+		<p>
+			Wenn aktiv, erscheint eine laufende Fahrt anonymisiert auf der öffentlichen Live-Karte der
+			Startseite: ohne Namen, die Position auf ca. 1 km gerundet, und nur solange die letzte
+			Messung nicht älter als 5 Minuten ist.
+		</p>
+		{#if livePublicError}<div class="notice error">{livePublicError}</div>{/if}
+		<label style="display: inline-flex; align-items: center; gap: 0.5rem">
+			<input
+				type="checkbox"
+				style="width: auto; min-height: auto"
+				checked={auth.me.livePublic}
+				disabled={livePublicSaving}
+				onchange={toggleLivePublic}
+			/>
+			Meine laufenden Fahrten anonymisiert auf der öffentlichen Live-Karte zeigen
+		</label>
+	</div>
+
+	<div class="card">
 		<h2>Eigene Fahrten</h2>
 		{#if tripsError}
 			<div class="notice error">{tripsError}</div>
@@ -214,7 +251,10 @@
 							<td><a href={`/trips/${trip.id}`}>{new Date(trip.startedAt).toLocaleString('de-DE')}</a></td>
 							<td>{TRAIN_TYPE_LABELS[trip.trainType]}</td>
 							<td>{trip.trainNumber ?? '–'}</td>
-							<td>{statusLabel(trip.status)}</td>
+							<td>
+								{statusLabel(trip.status)}
+								{#if trip.status === 'active'}<span class="live-badge">LIVE</span>{/if}
+							</td>
 							<td>{trip.sampleCount ?? '–'}</td>
 						</tr>
 					{/each}
@@ -295,14 +335,14 @@
 			Mit <code>curl</code> herunterladen statt über den Browser, sonst setzt macOS eine Quarantäne-Markierung auf die Datei:
 		</p>
 		<ul style="padding-left: 1.2rem">
-			<li><a href="/dl/bahnnet-darwin-arm64">bahnnet-darwin-arm64</a> (Mac, Apple Silicon)</li>
-			<li><a href="/dl/bahnnet-darwin-amd64">bahnnet-darwin-amd64</a> (Mac, Intel)</li>
-			<li><a href="/dl/bahnnet-linux-amd64">bahnnet-linux-amd64</a> (Linux)</li>
+			<li><a href="/dl/bahnping-darwin-arm64">bahnping-darwin-arm64</a> (Mac, Apple Silicon)</li>
+			<li><a href="/dl/bahnping-darwin-amd64">bahnping-darwin-amd64</a> (Mac, Intel)</li>
+			<li><a href="/dl/bahnping-linux-amd64">bahnping-linux-amd64</a> (Linux)</li>
 		</ul>
 		<pre style="background: rgba(0, 0, 0, 0.3); padding: 0.6rem; border-radius: 4px; overflow-x: auto"><code
-				>curl -fsSLo bahnnet https://bahnnet.treudler.net/dl/bahnnet-darwin-arm64 &amp;&amp; chmod +x bahnnet
-./bahnnet login https://bahnnet.treudler.net
-./bahnnet track</code
+				>curl -fsSLo bahnping https://bahnping.treudler.net/dl/bahnping-darwin-arm64 &amp;&amp; chmod +x bahnping
+./bahnping login https://bahnping.treudler.net
+./bahnping track</code
 			></pre>
 	</div>
 

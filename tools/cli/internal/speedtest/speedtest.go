@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/treudler/bahnnet-cli/internal/apiclient"
-	"github.com/treudler/bahnnet-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/apiclient"
+	"github.com/treudler/bahnping-cli/internal/model"
 )
 
 const (

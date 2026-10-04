@@ -26,9 +26,11 @@ export const NET_CLASS_LABELS: Record<NetClass, string> = {
 
 /**
  * Startzuordnung ASN → Netzklasse. Wird beim API-Start in asn_catalog eingespielt und kann dort
- * (Admin-Review) ergänzt werden. Die ASN des WIFIonICE-Backhauls ist noch zu ermitteln (Probefahrt).
+ * (Admin-Review) ergänzt werden.
  */
 export const ASN_SEED: ReadonlyArray<{ asn: number; name: string; netClass: NetClass }> = [
+  // Backhaul des WIFIonICE, beobachtet am 2026-10-04 im ICE 1077 (Baureihe 412, ICE 4)
+  { asn: 214498, name: 'McLaren Applied', netClass: 'db_wlan' },
   { asn: 3320, name: 'Deutsche Telekom AG', netClass: 'mobile_telekom' },
   { asn: 3209, name: 'Vodafone GmbH', netClass: 'mobile_vodafone' },
   { asn: 6805, name: 'Telefonica Germany GmbH & Co. OHG', netClass: 'mobile_o2' },

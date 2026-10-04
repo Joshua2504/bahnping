@@ -10,7 +10,7 @@ const Env = z.object({
   SMTP_PORT: z.coerce.number().int().default(4125),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  MAIL_FROM: z.string().default('Bahn-Netzwerk-Tracker <noreply@bahn-tracker.local>'),
+  MAIL_FROM: z.string().default('BahnPing <noreply@bahn-tracker.local>'),
   MAILPIT_UPSTREAM: z.string().optional(),
   APP_SECRET: z.string().min(32),
   /**

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "live_public" boolean DEFAULT true NOT NULL;

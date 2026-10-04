@@ -135,8 +135,14 @@ export const Me = z.object({
   displayName: z.string().nullable(),
   role: z.enum(['user', 'admin']),
   createdAt: z.string(),
+  /** Laufende Fahrten anonymisiert auf der öffentlichen Live-Karte zeigen, siehe `/account`. */
+  livePublic: z.boolean(),
 });
 export type Me = z.infer<typeof Me>;
+
+/** `PATCH /api/me/settings`: bisher nur `livePublic`, kein ALTCHA nötig (keine Enumeration/Spam-Gefahr). */
+export const MeSettingsUpdate = z.object({ livePublic: z.boolean() });
+export type MeSettingsUpdate = z.infer<typeof MeSettingsUpdate>;
 
 // ---------- API-Tokens (CLI/App) ----------
 
@@ -209,6 +215,44 @@ export type CellRow = z.infer<typeof CellRow>;
 export const CellsResponse = z.object({ res: z.number().int(), minTrips: z.number().int(), cells: z.array(CellRow) });
 export type CellsResponse = z.infer<typeof CellsResponse>;
 
+// ---------- Öffentliche Live-Karte ----------
+
+/** RTT/Verlust je Netzklasse, zusammengefasst über die letzten `LIVE_NET_WINDOW_MS` je Live-Zug. */
+export const LiveTrainNet = z.object({
+  netClass: NetClass,
+  rttMedian: z.number().nullable(),
+  lossPct: z.number().nullable(),
+});
+export type LiveTrainNet = z.infer<typeof LiveTrainNet>;
+
+/**
+ * Ein (ggf. aus mehreren Trackern zusammengefasster) Live-Zug auf `/api/public/live`. Enthält
+ * absichtlich keine Nutzer-ID, keinen Namen und keine Fahrt-ID – `key` ist ein HMAC-Kürzel, über
+ * das Positionen derselben Zugnummer zwischen zwei Abrufen stabil zuordenbar sind.
+ */
+export const LiveTrain = z.object({
+  key: z.string().max(12),
+  label: z.string(),
+  lat: z.number().min(-90).max(90),
+  lon: z.number().min(-180).max(180),
+  speedKmh: z.number().nullable(),
+  /** Anzahl Fahrten (Tracker), die zu diesem Eintrag zusammengefasst wurden. */
+  trackers: z.number().int().min(1),
+  nets: z.array(LiveTrainNet),
+  /** Alter des letzten Positions-Samples in Sekunden, gerundet auf 10s. */
+  lastSeenSec: z.number().int().nonnegative(),
+  iceState: z.string().nullable(),
+});
+export type LiveTrain = z.infer<typeof LiveTrain>;
+
+export const PublicLive = z.object({
+  /** Alle aktiven Fahrten, unabhängig von `livePublic` oder Position (siehe docs/API.md). */
+  activeTrips: z.number().int(),
+  trains: z.array(LiveTrain),
+  generatedAt: z.string(),
+});
+export type PublicLive = z.infer<typeof PublicLive>;
+
 export const PublicStats = z.object({
   totals: z.object({ trips: z.number().int(), samples: z.number().int(), users: z.number().int(), activeTrips: z.number().int() }),
   byNet: z.array(
@@ -221,6 +265,17 @@ export const PublicStats = z.object({
       lossPct: z.number().nullable(),
       downMedianBps: z.number().nullable(),
       upMedianBps: z.number().nullable(),
+    }),
+  ),
+  /** Prognose des ICE-Bordportals (iceState) gegen die tatsächlich gemessene Verbindung (ping_window). */
+  byIceState: z.array(
+    z.object({
+      iceState: z.string(),
+      nSamples: z.number().int(),
+      nTrips: z.number().int(),
+      availPct: z.number().nullable(),
+      lossPct: z.number().nullable(),
+      rttMedian: z.number().nullable(),
     }),
   ),
 });
@@ -342,8 +397,14 @@ export const TripSamples = z.object({
   trip: Trip,
   samples: z.array(TripSample),
   asns: z.array(TripSamplesAsn),
+  /** Serverzeit (ISO) beim Erstellen der Antwort, als Basis für den nächsten `?since=`-Request. */
+  serverTime: z.string(),
 });
 export type TripSamples = z.infer<typeof TripSamples>;
+
+/** Query für `GET /api/trips/:id/samples`: inkrementelles Nachladen für laufende Fahrten. */
+export const TripSamplesQuery = z.object({ since: z.iso.datetime({ offset: true }).optional() });
+export type TripSamplesQuery = z.infer<typeof TripSamplesQuery>;
 
 /** RFC 9457 Problem Details */
 export const Problem = z.object({

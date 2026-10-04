@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 
 /**
- * Liefert die CLI-Binaries unter `/dl/<dateiname>` aus (z.B. `/dl/bahnnet-linux-amd64`), als Download
+ * Liefert die CLI-Binaries unter `/dl/<dateiname>` aus (z.B. `/dl/bahnping-linux-amd64`), als Download
  * erzwungen (`Content-Disposition: attachment`) und ohne Zwischen-Caching, damit neue Builds sofort
  * ankommen. `DOWNLOADS_DIR` ist relativ zu `apps/api`; fehlt das Verzeichnis, wird nur gewarnt.
  */

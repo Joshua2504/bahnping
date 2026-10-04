@@ -13,17 +13,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/treudler/bahnnet-cli/internal/apiclient"
-	"github.com/treudler/bahnnet-cli/internal/config"
-	"github.com/treudler/bahnnet-cli/internal/iceportal"
-	"github.com/treudler/bahnnet-cli/internal/model"
-	"github.com/treudler/bahnnet-cli/internal/outbox"
-	"github.com/treudler/bahnnet-cli/internal/stats"
-	"github.com/treudler/bahnnet-cli/internal/tui"
-	"github.com/treudler/bahnnet-cli/internal/wsclient"
+	"github.com/treudler/bahnping-cli/internal/apiclient"
+	"github.com/treudler/bahnping-cli/internal/config"
+	"github.com/treudler/bahnping-cli/internal/iceportal"
+	"github.com/treudler/bahnping-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/outbox"
+	"github.com/treudler/bahnping-cli/internal/stats"
+	"github.com/treudler/bahnping-cli/internal/tui"
+	"github.com/treudler/bahnping-cli/internal/wsclient"
 )
 
-// trackFlags fasst die Optionen von "bahnnet track" zusammen.
+// trackFlags fasst die Optionen von "bahnping track" zusammen.
 type trackFlags struct {
 	train          string
 	number         string
@@ -68,7 +68,7 @@ func cmdTrack(args []string) error {
 		return err
 	}
 	if cfg == nil {
-		return fmt.Errorf(`nicht angemeldet, bitte zuerst "bahnnet login <server-url>" ausführen`)
+		return fmt.Errorf(`nicht angemeldet, bitte zuerst "bahnping login <server-url>" ausführen`)
 	}
 
 	api := apiclient.New(cfg.Server, cfg.Token)

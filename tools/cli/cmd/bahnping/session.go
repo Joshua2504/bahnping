@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/treudler/bahnnet-cli/internal/apiclient"
-	"github.com/treudler/bahnnet-cli/internal/iceportal"
-	"github.com/treudler/bahnnet-cli/internal/model"
-	"github.com/treudler/bahnnet-cli/internal/outbox"
-	"github.com/treudler/bahnnet-cli/internal/speedtest"
-	"github.com/treudler/bahnnet-cli/internal/stats"
-	"github.com/treudler/bahnnet-cli/internal/tui"
-	"github.com/treudler/bahnnet-cli/internal/wsclient"
+	"github.com/treudler/bahnping-cli/internal/apiclient"
+	"github.com/treudler/bahnping-cli/internal/iceportal"
+	"github.com/treudler/bahnping-cli/internal/model"
+	"github.com/treudler/bahnping-cli/internal/outbox"
+	"github.com/treudler/bahnping-cli/internal/speedtest"
+	"github.com/treudler/bahnping-cli/internal/stats"
+	"github.com/treudler/bahnping-cli/internal/tui"
+	"github.com/treudler/bahnping-cli/internal/wsclient"
 )
 
 // positionMaxAge: ICE-Portal-Status wird nur verwendet, wenn er jünger als dieser Wert ist.
@@ -498,7 +498,7 @@ func (s *trackSession) finish() error {
 		fmt.Fprintf(os.Stderr, "Warnung: Fahrtende konnte dem Server nicht gemeldet werden: %v\r\n", endErr)
 	}
 	if remaining > 0 {
-		fmt.Fprintf(os.Stderr, "%d Messung(en) konnten nicht gesendet werden und werden beim nächsten Start von \"bahnnet track\" nachgesendet (%s).\r\n", remaining, s.outbox.Path())
+		fmt.Fprintf(os.Stderr, "%d Messung(en) konnten nicht gesendet werden und werden beim nächsten Start von \"bahnping track\" nachgesendet (%s).\r\n", remaining, s.outbox.Path())
 	}
 	return nil
 }
