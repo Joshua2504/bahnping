@@ -8,7 +8,8 @@ const JOB_INTERVAL_MS = 5 * 60_000;
 
 /** Aktive Fahrten ohne neue Samples seit TRIP_IDLE_END_MS automatisch beenden (z.B. App beendet, Akku leer). */
 async function endIdleTrips(db: Db, log: FastifyBaseLogger): Promise<void> {
-  const cutoff = new Date(Date.now() - TRIP_IDLE_END_MS);
+  // Als ISO-String: postgres-js kann ein Date in einem sql-Ausdruck ohne Spaltentyp nicht serialisieren.
+  const cutoff = new Date(Date.now() - TRIP_IDLE_END_MS).toISOString();
   const lastActivity = sql`coalesce(${trips.lastSampleAt}, ${trips.startedAt})`;
   const rows = await db
     .update(trips)

@@ -51,11 +51,17 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
 ## Fahrten / Messwerte (Auth Pflicht)
 - `POST /api/trips` Body `TripCreate` → `201 Trip`. Es darf nur eine aktive Fahrt je Nutzer geben; eine
   ältere aktive wird automatisch mit `status=ended` geschlossen.
+  - Fortsetzen: Gibt es eine Fahrt des Nutzers mit gleicher Gattung und Zugnummer, deren letzte Aktivität
+    (`last_sample_at`, sonst `ended_at`/`started_at`) höchstens `TRIP_RESUME_WINDOW_MS` (10 min) zurückliegt,
+    wird diese wieder `active` gesetzt und mit `200 Trip` zurückgegeben (gleiche ID). Ohne Zugnummer kein Fortsetzen.
 - `GET /api/trips` → `200 Trip[]` (eigene, neueste zuerst, mit `sampleCount`).
 - `GET /api/trips/:id` → `200 Trip` (nur eigene, sonst 404).
 - `POST /api/trips/:id/end` Body `TripEnd` → `200 Trip`.
 - `PATCH /api/trips/:id` Body `TripUpdate` → `200 Trip` (nur eigene; z.B. wenn die CLI die
   Zugnummer erst nachträglich aus dem ICE-Portal erfährt). Auch per Bearer-Token nutzbar.
+  Wird dabei die Zugnummer einer aktiven Fahrt gesetzt und passt eine vorherige Fahrt nach denselben
+  Regeln wie beim Fortsetzen, werden deren Samples in diese Fahrt übernommen (`startedAt` der älteren),
+  die ältere Fahrt wird gelöscht. Die ID der aktiven Fahrt bleibt erhalten.
 - `POST /api/trips/:id/samples` Body `SampleBatch` (JSON; optional `Content-Encoding: gzip`) → `200 SampleBatchResponse`.
   - idempotent über `id` (ON CONFLICT DO NOTHING → zählt als `duplicates`).
   - Server berechnet `ts = client ts + trip.clockOffsetMs`, `h3_r8`/`h3_r9` aus lat/lon (h3-js `latLngToCell`).

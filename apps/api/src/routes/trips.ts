@@ -1,9 +1,10 @@
 import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gt, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, isNotNull, lt, ne, sql } from 'drizzle-orm';
 import { latLngToCell } from 'h3-js';
 import {
   Sample,
+  TRIP_RESUME_WINDOW_MS,
   TripCreate,
   TripEnd,
   TripSamplesQuery,
@@ -13,6 +14,7 @@ import {
   type TripSample,
   type TripSamples,
 } from '@bahn/shared';
+import type { Db } from '../db/client.js';
 import { asnCatalog, samples, trips } from '../db/schema.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
@@ -33,28 +35,84 @@ function toTrip(row: typeof trips.$inferSelect, sampleCount?: number): Trip {
   };
 }
 
+/** Letzte Aktivität einer Fahrt (letztes Sample, sonst Ende, sonst Start). */
+const lastActivity = sql`coalesce(${trips.lastSampleAt}, ${trips.endedAt}, ${trips.startedAt})`;
+
+/**
+ * Sucht die jüngste Fahrt des Nutzers im selben Zug (Gattung + Zugnummer), deren letzte Aktivität
+ * nicht länger als TRIP_RESUME_WINDOW_MS vor `ref` liegt. Ohne Zugnummer kein Fortsetzen, weil
+ * dann nicht sicher ist, dass es derselbe Zug ist.
+ */
+async function findResumableTrip(
+  db: Pick<Db, 'select'>,
+  userId: string,
+  trainType: string,
+  trainNumber: string | null,
+  ref: Date,
+  excludeId?: string,
+): Promise<typeof trips.$inferSelect | undefined> {
+  if (!trainNumber) return undefined;
+  const conditions = [
+    eq(trips.userId, userId),
+    eq(trips.trainType, trainType),
+    eq(trips.trainNumber, trainNumber),
+    ne(trips.status, 'flagged'),
+    // Als ISO-String: postgres-js kann ein Date in einem sql-Ausdruck ohne Spaltentyp nicht serialisieren.
+    gte(lastActivity, new Date(ref.getTime() - TRIP_RESUME_WINDOW_MS).toISOString()),
+  ];
+  if (excludeId) conditions.push(ne(trips.id, excludeId), lt(trips.startedAt, ref));
+  const rows = await db
+    .select()
+    .from(trips)
+    .where(and(...conditions))
+    .orderBy(desc(trips.startedAt))
+    .limit(1);
+  return rows[0];
+}
+
 export function registerTripRoutes(app: FastifyInstance): void {
   const { db, cfg } = app.ctx;
 
   app.post('/api/trips', { preHandler: app.requireAuth }, async (request, reply) => {
     const body = parseOrProblem(TripCreate, request.body, reply);
     if (!body) return;
-    // Es darf nur eine aktive Fahrt je Nutzer geben; ältere aktive wird automatisch beendet.
-    await db
-      .update(trips)
-      .set({ status: 'ended', endedAt: new Date() })
-      .where(and(eq(trips.userId, request.userId!), eq(trips.status, 'active')));
-    const inserted = await db
-      .insert(trips)
-      .values({
-        userId: request.userId!,
-        trainType: body.trainType,
-        trainNumber: normalizeTrainNumber(body.trainNumber),
-        platform: body.platform,
-        clockOffsetMs: body.clockOffsetMs ?? 0,
-      })
-      .returning();
-    reply.code(201).send(toTrip(inserted[0]));
+    const userId = request.userId!;
+    const trainNumber = normalizeTrainNumber(body.trainNumber);
+    const result = await db.transaction(async (tx) => {
+      // Startet der Nutzer kurz nach dem Ende erneut im selben Zug, wird die alte Fahrt fortgesetzt.
+      const resumable = await findResumableTrip(tx, userId, body.trainType, trainNumber, new Date());
+      // Es darf nur eine aktive Fahrt je Nutzer geben; ältere aktive wird automatisch beendet.
+      const activeConditions = [eq(trips.userId, userId), eq(trips.status, 'active')];
+      if (resumable) activeConditions.push(ne(trips.id, resumable.id));
+      await tx
+        .update(trips)
+        .set({ status: 'ended', endedAt: new Date() })
+        .where(and(...activeConditions));
+      if (resumable) {
+        const resumed = await tx
+          .update(trips)
+          .set({
+            status: 'active',
+            endedAt: null,
+            ...(body.clockOffsetMs !== undefined ? { clockOffsetMs: body.clockOffsetMs } : {}),
+          })
+          .where(eq(trips.id, resumable.id))
+          .returning();
+        return { trip: resumed[0], resumed: true };
+      }
+      const inserted = await tx
+        .insert(trips)
+        .values({
+          userId,
+          trainType: body.trainType,
+          trainNumber,
+          platform: body.platform,
+          clockOffsetMs: body.clockOffsetMs ?? 0,
+        })
+        .returning();
+      return { trip: inserted[0], resumed: false };
+    });
+    reply.code(result.resumed ? 200 : 201).send(toTrip(result.trip));
   });
 
   app.get('/api/trips', { preHandler: app.requireAuth }, async (request, reply) => {
@@ -101,8 +159,21 @@ export function registerTripRoutes(app: FastifyInstance): void {
     const patch: Partial<typeof trips.$inferInsert> = {};
     if (body.trainType !== undefined) patch.trainType = body.trainType;
     if (body.trainNumber !== undefined) patch.trainNumber = normalizeTrainNumber(body.trainNumber);
-    const updated = Object.keys(patch).length > 0 ? await db.update(trips).set(patch).where(eq(trips.id, id)).returning() : existing;
-    reply.send(toTrip(updated[0]));
+    const updated = await db.transaction(async (tx) => {
+      let row = Object.keys(patch).length > 0 ? (await tx.update(trips).set(patch).where(eq(trips.id, id)).returning())[0] : existing[0];
+      // Wird die Zugnummer erst nachträglich bekannt (CLI), kurz vorher beendete Fahrt im selben Zug
+      // in diese übernehmen. Die neue ID bleibt erhalten, weil der Client weiter an sie sendet.
+      if (row.status === 'active' && patch.trainNumber) {
+        const previous = await findResumableTrip(tx, row.userId, row.trainType, row.trainNumber, row.startedAt, row.id);
+        if (previous) {
+          await tx.update(samples).set({ tripId: row.id }).where(eq(samples.tripId, previous.id));
+          row = (await tx.update(trips).set({ startedAt: previous.startedAt }).where(eq(trips.id, row.id)).returning())[0];
+          await tx.delete(trips).where(eq(trips.id, previous.id));
+        }
+      }
+      return row;
+    });
+    reply.send(toTrip(updated));
   });
 
   app.get('/api/trips/:id/samples', { preHandler: app.requireAuth }, async (request, reply) => {

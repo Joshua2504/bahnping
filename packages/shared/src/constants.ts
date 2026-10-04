@@ -19,6 +19,8 @@ export const BATCH_MAX_SAMPLES = 500;
 export const BATCH_FLUSH_MS = 30_000;
 /** Fahrt wird serverseitig als beendet markiert, wenn so lange nichts kommt. */
 export const TRIP_IDLE_END_MS = 30 * 60_000;
+/** Neue Fahrt im selben Zug innerhalb dieses Abstands setzt die vorherige Fahrt fort. */
+export const TRIP_RESUME_WINDOW_MS = 10 * 60_000;
 /** Gültigkeit eines signierten whoami-Tokens. */
 export const NET_TOKEN_TTL_MS = 5 * 60_000;
 export const MAGIC_LINK_TTL_MS = 15 * 60_000;
