@@ -1,5 +1,6 @@
 // Orchestriert die gesamte Mess-Engine für den Fahrt-Modus und hält den Live-Zustand (Runes).
 import {
+	SPEEDTEST_CONTINUOUS_PAUSE_MS,
 	WINDOW_MS,
 	type NetToken,
 	type PingWindowSample,
@@ -8,7 +9,7 @@ import {
 	type SpeedtestSample,
 	type TrainType,
 } from '@bahn/shared';
-import { api, ApiError, type TripSampleExt } from '../api.js';
+import { api, type TripSampleExt } from '../api.js';
 import { i18n } from '../i18n.svelte.js';
 import { GeoTracker, type GeoState } from './geo.js';
 import { NetWhoami } from './net.js';
@@ -117,12 +118,10 @@ const EMPTY_NET: NetDisplay = { label: null, asName: null, asn: null, ipVersion:
 // Nutzersichtbare Statustexte, sprachabhängig (siehe `msg()`).
 const de = {
 	endTripFailed: 'Fahrt konnte nicht serverseitig beendet werden, Daten sind lokal gepuffert.',
-	speedtestCooldownActive: 'Speedtest-Pause aktiv',
 	speedtestFailed: 'Speedtest fehlgeschlagen',
 };
 const en: typeof de = {
 	endTripFailed: 'Ride could not be ended on the server, data is buffered locally.',
-	speedtestCooldownActive: 'Speedtest cooldown active',
 	speedtestFailed: 'Speedtest failed',
 };
 function msg(): typeof de {
@@ -156,7 +155,11 @@ class Tracker {
 
 	lastSpeedtest = $state<SpeedtestEntry | null>(null);
 	speedtestProgress = $state<SpeedtestProgress | null>(null);
-	speedtestCooldownUntil = $state<number | null>(null);
+	/** Dauer-Speedtest: Tests laufen in Schleife mit SPEEDTEST_CONTINUOUS_PAUSE_MS Pause, bis abgeschaltet. */
+	speedtestContinuous = $state(false);
+	speedtestRunning = $state(false);
+	/** Erhöht sich bei jedem Ein-/Ausschalten, damit eine alte Schleife sich selbst beendet. */
+	private continuousGen = 0;
 
 	outboxStatus = $state<OutboxStatus>({ pending: 0, lastUploadAt: null, lastError: null, needsLogin: false });
 	errors = $state<string[]>([]);
@@ -242,6 +245,7 @@ class Tracker {
 		this.socket?.close();
 		window.removeEventListener('beforeunload', this.onBeforeUnload);
 
+		this.setSpeedtestContinuous(false);
 		this.active = false;
 		this.writeStorage(null);
 
@@ -256,7 +260,25 @@ class Tracker {
 		this.tripId = null;
 	}
 
+	setSpeedtestContinuous(on: boolean): void {
+		if (on === this.speedtestContinuous) return;
+		this.speedtestContinuous = on;
+		const gen = ++this.continuousGen;
+		if (on) void this.continuousLoop(gen);
+	}
+
+	private async continuousLoop(gen: number): Promise<void> {
+		while (gen === this.continuousGen && this.active) {
+			await this.runSpeedtest();
+			if (gen !== this.continuousGen || !this.active) return;
+			await new Promise((resolve) => setTimeout(resolve, SPEEDTEST_CONTINUOUS_PAUSE_MS));
+		}
+	}
+
 	async runSpeedtest(): Promise<void> {
+		// Taste, Dauer-Modus und eine noch laufende alte Schleife dürfen sich nicht überlappen.
+		if (this.speedtestRunning) return;
+		this.speedtestRunning = true;
 		const runner = new SpeedtestRunner();
 		try {
 			const result = await runner.run((p) => (this.speedtestProgress = p));
@@ -280,14 +302,12 @@ class Tracker {
 				durationMs: result.endedAt - result.startedAt,
 			};
 			void this.pushSample(sample);
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 429) {
-				this.speedtestCooldownUntil = Date.now() + (err.retryAfterSec ?? 30) * 1000;
-				this.speedtestProgress = { phase: 'error', error: msg().speedtestCooldownActive, retryAfterSec: err.retryAfterSec };
-			} else {
-				this.speedtestProgress = { phase: 'error', error: msg().speedtestFailed };
-				this.errors = [...this.errors, msg().speedtestFailed];
-			}
+		} catch {
+			this.speedtestProgress = { phase: 'error', error: msg().speedtestFailed };
+			// Im Dauer-Modus scheitern Tests bei Funklöchern oft mehrfach; Meldung nur einmal anzeigen.
+			if (!this.errors.includes(msg().speedtestFailed)) this.errors = [...this.errors, msg().speedtestFailed];
+		} finally {
+			this.speedtestRunning = false;
 		}
 	}
 

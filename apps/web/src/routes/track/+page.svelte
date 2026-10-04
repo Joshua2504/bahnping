@@ -43,7 +43,8 @@
 		loginNow: 'Jetzt anmelden',
 		stopRide: 'Fahrt beenden',
 		speedtestRunning: 'Speedtest läuft…',
-		speedtestPause: (s: number) => `Speedtest (${s}s Pause)`,
+		continuous: 'Dauer-Speedtest',
+		continuousHint: 'Testet ohne Unterbrechung (5 s Pause). Bis zu ~100 MB pro Test, verbraucht viel Datenvolumen.',
 		speedtest: 'Speedtest',
 		connPrefix: 'Verbindung zum Server:',
 		connConnecting: 'verbinde…',
@@ -93,7 +94,8 @@
 		loginNow: 'Sign in now',
 		stopRide: 'End ride',
 		speedtestRunning: 'Speedtest running…',
-		speedtestPause: (s: number) => `Speedtest (${s}s cooldown)`,
+		continuous: 'Continuous speedtest',
+		continuousHint: 'Tests back to back (5 s pause). Up to ~100 MB per test, uses a lot of data.',
 		speedtest: 'Speedtest',
 		connPrefix: 'Connection to server:',
 		connConnecting: 'connecting…',
@@ -173,9 +175,6 @@
 		return bps === null ? '–' : `${(bps / 1_000_000).toFixed(1)} Mbit/s`;
 	}
 
-	const cooldownSecLeft = $derived(
-		tracker.speedtestCooldownUntil ? Math.max(0, Math.round((tracker.speedtestCooldownUntil - Date.now()) / 1000)) : 0,
-	);
 	const speedKmh = $derived(tracker.geo.speedMps !== null ? tracker.geo.speedMps * 3.6 : null);
 </script>
 
@@ -196,19 +195,23 @@
 			<button
 				class="btn"
 				onclick={() => tracker.runSpeedtest()}
-				disabled={tracker.speedtestProgress?.phase === 'download' ||
-					tracker.speedtestProgress?.phase === 'upload' ||
-					cooldownSecLeft > 0}
+				disabled={tracker.speedtestRunning || tracker.speedtestContinuous}
 			>
-				{#if tracker.speedtestProgress?.phase === 'download' || tracker.speedtestProgress?.phase === 'upload'}
-					{m.speedtestRunning}
-				{:else if cooldownSecLeft > 0}
-					{m.speedtestPause(cooldownSecLeft)}
-				{:else}
-					{m.speedtest}
-				{/if}
+				{tracker.speedtestRunning ? m.speedtestRunning : m.speedtest}
 			</button>
+			<label class="track-continuous" title={m.continuousHint}>
+				<input
+					type="checkbox"
+					checked={tracker.speedtestContinuous}
+					onchange={(e) => tracker.setSpeedtestContinuous(e.currentTarget.checked)}
+					style="width: auto; min-height: auto"
+				/>
+				{m.continuous}
+			</label>
 		</div>
+		{#if tracker.speedtestContinuous}
+			<div class="notice">{m.continuousHint}</div>
+		{/if}
 
 		{#if tracker.wsState !== 'open'}
 			<div class="notice warn">{m.connPrefix} {tracker.wsState === 'connecting' ? m.connConnecting : m.connDisconnected}</div>

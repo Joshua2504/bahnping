@@ -25,13 +25,14 @@ import (
 
 // trackFlags fasst die Optionen von "bahnping track" zusammen.
 type trackFlags struct {
-	train          string
-	number         string
-	speedtestEvery time.Duration
-	noPosition     bool
-	icePortalURL   string
-	plain          bool
-	debug          bool
+	train               string
+	number              string
+	speedtestEvery      time.Duration
+	speedtestContinuous bool
+	noPosition          bool
+	icePortalURL        string
+	plain               bool
+	debug               bool
 }
 
 func parseTrackFlags(args []string) (*trackFlags, error) {
@@ -40,6 +41,7 @@ func parseTrackFlags(args []string) (*trackFlags, error) {
 	fs.StringVar(&f.train, "train", "", "Zugtyp: ice|ic|regio|sbahn|other")
 	fs.StringVar(&f.number, "number", "", `Zugnummer, z.B. "ICE 599"`)
 	fs.DurationVar(&f.speedtestEvery, "speedtest-every", 0, "Automatischer Speedtest in diesem Abstand, z.B. 10m")
+	fs.BoolVar(&f.speedtestContinuous, "speedtest-continuous", false, "Dauer-Speedtest ab Start aktiv (fortlaufend mit Pause dazwischen, viel Datenvolumen!)")
 	fs.BoolVar(&f.noPosition, "no-position", false, "Keine Position senden (immer posSource=none)")
 	fs.StringVar(&f.icePortalURL, "iceportal-url", iceportal.DefaultBaseURL, "ICE-Portal-Basis-URL (für Tests mit Mock)")
 	fs.BoolVar(&f.plain, "plain", false, "Eine Log-Zeile pro Fenster statt Live-Ansicht")
@@ -186,6 +188,7 @@ func cmdTrack(args []string) error {
 	sess.flags = flags
 
 	var wg sync.WaitGroup
+	sess.wg = &wg
 	wg.Add(1)
 	go func() { defer wg.Done(); sess.pingWindowLoop() }()
 	wg.Add(1)
@@ -201,6 +204,9 @@ func cmdTrack(args []string) error {
 	if flags.speedtestEvery > 0 {
 		wg.Add(1)
 		go func() { defer wg.Done(); sess.autoSpeedtestLoop(flags.speedtestEvery) }()
+	}
+	if flags.speedtestContinuous {
+		sess.toggleContinuousSpeedtest()
 	}
 
 	renderDone := make(chan struct{})

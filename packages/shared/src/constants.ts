@@ -14,7 +14,8 @@ export const SPEEDTEST_DURATION_MS = 8000;
 export const SPEEDTEST_STREAMS = 4;
 /** Harte Obergrenze je Richtung und Test. */
 export const SPEEDTEST_MAX_BYTES = 50 * 1024 * 1024;
-export const SPEEDTEST_COOLDOWN_MS = 30_000;
+/** Pause zwischen zwei Tests im Dauer-Speedtest; genug Ping-Werte für die Leerlauf-RTT (rttIdleMs). */
+export const SPEEDTEST_CONTINUOUS_PAUSE_MS = 5000;
 export const BATCH_MAX_SAMPLES = 500;
 export const BATCH_FLUSH_MS = 10_000;
 /** Fahrt wird serverseitig als beendet markiert, wenn so lange nichts kommt. */

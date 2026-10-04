@@ -11,7 +11,6 @@ export interface SpeedtestProgress {
 	downBps?: number | null;
 	upBps?: number | null;
 	error?: string;
-	retryAfterSec?: number;
 }
 
 export interface SpeedtestResult {
@@ -51,7 +50,7 @@ class Counter {
 export class SpeedtestRunner {
 	private uploadBlob: Blob | null = null;
 
-	/** Wirft ApiError (z. B. 429 mit retryAfterSec) wenn die Quota aktiv ist. */
+	/** Wirft ApiError, wenn /api/speed/start fehlschlägt (z. B. nicht angemeldet). */
 	async run(onProgress: (p: SpeedtestProgress) => void): Promise<SpeedtestResult> {
 		onProgress({ phase: 'quota' });
 		await api.speedStart();

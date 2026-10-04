@@ -16,9 +16,10 @@ const (
 	SpeedtestDurationMs = 8000
 	SpeedtestStreams    = 4
 	SpeedtestMaxBytes   = 50 * 1024 * 1024
-	SpeedtestCooldownMs = 30_000
-	BatchMaxSamples     = 500
-	BatchFlushMs        = 10_000
+	// SpeedtestContinuousPauseMs ist die Pause zwischen zwei Tests im Dauer-Speedtest.
+	SpeedtestContinuousPauseMs = 5000
+	BatchMaxSamples            = 500
+	BatchFlushMs               = 10_000
 )
 
 // WindowDuration als time.Duration, bequem für Timer.
@@ -35,3 +36,6 @@ const WhoamiInterval = time.Duration(WhoamiIntervalMs) * time.Millisecond
 
 // BatchFlushInterval als time.Duration.
 const BatchFlushInterval = time.Duration(BatchFlushMs) * time.Millisecond
+
+// SpeedtestContinuousPause als time.Duration.
+const SpeedtestContinuousPause = time.Duration(SpeedtestContinuousPauseMs) * time.Millisecond

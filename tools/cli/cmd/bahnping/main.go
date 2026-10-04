@@ -72,6 +72,7 @@ Optionen für "track":
   --train ice|ic|regio|sbahn|other   Zugtyp (sonst ICE-Portal oder interaktive Auswahl)
   --number "ICE 599"                  Zugnummer (sonst ICE-Portal, falls verfügbar)
   --speedtest-every 10m               Automatischer Speedtest in diesem Abstand
+  --speedtest-continuous               Dauer-Speedtest ab Start aktiv (auch per Taste "c", viel Datenvolumen!)
   --no-position                       Keine Position senden (immer posSource=none)
   --iceportal-url https://iceportal.de ICE-Portal-Basis-URL (für Tests mit Mock)
   --plain                             Eine Log-Zeile pro Fenster statt Live-Ansicht

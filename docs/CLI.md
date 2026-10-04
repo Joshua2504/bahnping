@@ -80,6 +80,7 @@ Optionen:
 | `--train ice\|ic\|regio\|sbahn\|other` | Zugtyp. Ohne Angabe wird er aus dem ICE-Portal übernommen, sonst interaktiv abgefragt. |
 | `--number "ICE 599"` | Zugnummer. Ohne Angabe wird sie, falls möglich, aus dem ICE-Portal nachgetragen. |
 | `--speedtest-every 10m` | Automatischer Speedtest in diesem Abstand (sonst nur per Taste `s`). |
+| `--speedtest-continuous` | Dauer-Speedtest ist von Anfang an aktiv (sonst per Taste `c` umschaltbar). Funktioniert auch mit `--plain`, wo es keine Tasten gibt. Achtung: viel Datenvolumen (siehe unten). |
 | `--no-position` | Keine Position senden, auch wenn das ICE-Portal erreichbar ist (immer `posSource=none`). |
 | `--iceportal-url https://iceportal.de` | Andere ICE-Portal-Basis-URL, z.B. für Tests mit einem Mock-Server. |
 | `--plain` | Eine Log-Zeile pro 10-Sekunden-Fenster statt der Live-Ansicht (für Logs/`screen`/`tmux`). |
@@ -87,8 +88,12 @@ Optionen:
 
 In der Live-Ansicht:
 
-- **`s`** löst sofort einen Speedtest aus (Download/Upload, je 8 s, gedeckelt wie im Browser:
-  höchstens 1 Test pro 2 Minuten serverseitig).
+- **`s`** löst sofort einen Speedtest aus (Download/Upload, je 8 s). Es gibt kein serverseitiges
+  Limit mehr; läuft bereits ein Test (auch aus `--speedtest-every` oder dem Dauer-Modus), wird
+  der Tastendruck einfach übersprungen.
+- **`c`** schaltet den Dauer-Speedtest-Modus um: solange aktiv, läuft fortlaufend ein Speedtest
+  nach dem anderen mit kurzer Pause dazwischen (siehe unten, `--speedtest-continuous` schaltet
+  ihn alternativ schon beim Start ein).
 - **`q`** oder Ctrl-C beendet die Fahrt: letztes Mess-Fenster wird abgeschlossen, die lokale
   Warteschlange so weit wie möglich hochgeladen, dann `POST /api/trips/:id/end` gesendet.
 
@@ -110,8 +115,10 @@ In der Live-Ansicht:
 - **Position**: aus der ICE-Portal-API (`GET /api1/rs/status`, abgefragt alle 2 s; Fahrtdaten alle 30 s), wenn diese erreichbar ist und der
   letzte erfolgreiche Abruf jünger als 15 s ist; sonst `posSource=none` (keine Position, auch kein
   GPS – das kann die CLI auf einem Laptop nicht).
-- **Speedtest**: auf Tastendruck oder per `--speedtest-every`, 4 parallele Download-/Upload-Streams,
-  je 8 s, erste Sekunde verworfen.
+- **Speedtest**: auf Tastendruck, per `--speedtest-every` oder im Dauer-Modus (Taste `c` bzw.
+  `--speedtest-continuous`), 4 parallele Download-/Upload-Streams, je 8 s, erste Sekunde
+  verworfen. Ein einzelner Test überträgt bis zu ~100 MiB (50 MiB je Richtung) – der Dauer-Modus
+  wiederholt das mit nur kurzer Pause dazwischen und kostet entsprechend viel Datenvolumen.
 
 Alle Messungen werden zunächst in eine lokale Datei
 (`~/.local/state/bahnping/outbox-<fahrt-id>.jsonl`) geschrieben und von dort in Batches

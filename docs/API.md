@@ -141,11 +141,12 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   senden, Server antwortet `sync {cid, t0, t1, t2}` (t1 Empfang, t2 Senden, Epoch-ms). Verbindung ohne pong
   für 60 s wird geschlossen.
 
-## Speedtest (Auth Pflicht, Quota 1 Test / SPEEDTEST_COOLDOWN_MS je Nutzer, im RAM)
+## Speedtest (Auth Pflicht, kein Cooldown)
 - `GET /api/speed/down?bytes=N` → `200 application/octet-stream`, N ≤ SPEEDTEST_MAX_BYTES, Zufallsdaten aus
   einem beim Start erzeugten 4-MiB-Puffer, `Cache-Control: no-store`, `Content-Encoding: identity`.
 - `POST /api/speed/up` → Body (octet-stream, ≤ SPEEDTEST_MAX_BYTES) wird gezählt und verworfen → `{ bytes }`.
-- Quota: `POST /api/speed/start` → `204` oder `429` mit `Retry-After`. Der Client ruft `start` vor dem Test.
+- `POST /api/speed/start` → `204`. Früher Quota (429 mit `Retry-After`), jetzt ohne Limit; bleibt für
+  bestehende Clients erhalten, die `start` vor jedem Test aufrufen.
 
 ## Öffentlich (kein Auth)
 - `GET /api/public/cells?res=&bbox=&net=&period=&train=&mine=` → `200 CellsResponse`.

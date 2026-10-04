@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Readable } from 'node:stream';
-import { SPEEDTEST_COOLDOWN_MS, SPEEDTEST_MAX_BYTES } from '@bahn/shared';
+import { SPEEDTEST_MAX_BYTES } from '@bahn/shared';
 import { sendProblem } from '../lib/problem.js';
-
-/** Letzter Testbeginn je Nutzer, nur im RAM (Quota, kein Persistenzbedarf in der Testversion). */
-const lastStart = new Map<string, number>();
 
 export function registerSpeedRoutes(app: FastifyInstance): void {
   const { speedBuffer } = app.ctx;
@@ -30,17 +27,8 @@ export function registerSpeedRoutes(app: FastifyInstance): void {
     payload.on('error', (err) => finish(Object.assign(err, { statusCode: 400 })));
   });
 
-  app.post('/api/speed/start', { preHandler: app.requireAuth }, async (request, reply) => {
-    const userId = request.userId!;
-    const now = Date.now();
-    const last = lastStart.get(userId);
-    if (last !== undefined && now - last < SPEEDTEST_COOLDOWN_MS) {
-      const retryAfterS = Math.ceil((SPEEDTEST_COOLDOWN_MS - (now - last)) / 1000);
-      reply.header('retry-after', String(retryAfterS));
-      sendProblem(reply, 429, 'Zu viele Speedtests', { detail: `Bitte ${retryAfterS}s warten` });
-      return;
-    }
-    lastStart.set(userId, now);
+  // Kein Cooldown mehr (Dauer-Speedtest). Endpunkt bleibt für bestehende Clients, die ihn vor jedem Test aufrufen.
+  app.post('/api/speed/start', { preHandler: app.requireAuth }, async (_request, reply) => {
     reply.code(204).send();
   });
 

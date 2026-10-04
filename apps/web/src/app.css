@@ -538,6 +538,12 @@ th {
 	flex-wrap: wrap;
 }
 
+.track-continuous {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+
 @media (min-width: 640px) {
 	.app-main {
 		padding: 1.5rem;

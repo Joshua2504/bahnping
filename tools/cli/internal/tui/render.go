@@ -137,9 +137,13 @@ func Render(w io.Writer, s Snapshot, first bool) {
 	line("")
 
 	line("Puffer   %d ausstehend  Upload %s", s.OutboxPending, s.UploadStatus)
-	line("Speedtest  %s", s.LastSpeedtest)
+	speedtestLabel := "Speedtest"
+	if s.SpeedtestContinuous {
+		speedtestLabel = "Speedtest (Dauer)"
+	}
+	line("%s  %s", speedtestLabel, s.LastSpeedtest)
 	line("")
-	line("[s] Speedtest   [q] Beenden")
+	line("[s] Speedtest   [c] Dauer-Speedtest an/aus   [q] Beenden")
 
 	fmt.Fprint(w, b.String())
 }

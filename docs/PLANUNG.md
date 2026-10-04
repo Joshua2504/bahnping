@@ -160,7 +160,7 @@ API hinter einem klar definierten Vertrag steht.
 1. „Fahrt starten“: Nutzer wählt Zugtyp (ICE / IC/EC / RE/RB / S-Bahn / sonstiges) und optional die
    Zugnummer; Wake Lock aktivieren; Geolocation-Berechtigung (präzise) anfordern; WS verbinden; Zeit-Sync.
 2. Laufend: Standort, Pings, periodischer `whoami`, Captive-Portal-Probe, Live-Stats.
-3. Auf Knopfdruck: Speedtest (Cooldown).
+3. Auf Knopfdruck: Speedtest (kein Cooldown), optional als Dauer-Speedtest in Schleife.
 4. „Fahrt beenden“ oder Auto-Ende nach 30 min ohne Bewegung/ohne GPS.
 5. Nachbearbeitung serverseitig: Plausibilität, Netzklasse, H3, Aggregation.
 
@@ -191,7 +191,8 @@ Kein ICMP im Browser. Stattdessen:
 
 ### 6.4 Speedtest
 
-- Nur manuell (Button), serverseitig per Nutzer **1× pro 2 min** und 50 MB/Test gedeckelt.
+- Manuell (Button) oder optional als Dauer-Speedtest (Tests in Schleife, 5 s Pause dazwischen,
+  `SPEEDTEST_CONTINUOUS_PAUSE_MS`). Kein Cooldown, 50 MB je Richtung und Test gedeckelt.
 - Download: 4 parallele `fetch`-Streams auf `/api/speed/down?bytes=…`, Server liefert vorgenerierte
   Zufallsblöcke (`Content-Encoding: identity`, Caddy-Kompression für diesen Pfad aus). Messung über
   `ReadableStream`, Dauer 8 s, die erste Sekunde (Ramp-up) wird verworfen.

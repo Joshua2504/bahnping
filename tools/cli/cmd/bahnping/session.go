@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/treudler/bahnping-cli/internal/apiclient"
@@ -38,11 +39,21 @@ type trackSession struct {
 	rttRing    *stats.RttRing
 	state      *tui.State
 	flags      *trackFlags
+	wg         *sync.WaitGroup
 
 	flushNow chan struct{}
 
 	netMu    sync.Mutex
 	netToken *model.NetToken
+
+	// speedtestRunning verhindert parallele Speedtests aus Taste "s", --speedtest-every und
+	// Dauer-Modus: läuft schon einer, wird ein neuer Aufruf einfach übersprungen.
+	speedtestRunning atomic.Bool
+	// continuous schaltet den Dauer-Speedtest-Modus (Taste "c" / --speedtest-continuous) um.
+	// continuousGen erhöht sich bei jedem Umschalten, damit eine alte Schleife nach schnellem
+	// Aus/An nicht neben der neuen weiterläuft.
+	continuous    atomic.Bool
+	continuousGen atomic.Int64
 
 	winMu            sync.Mutex
 	recentWindows    []stats.WindowResult
@@ -520,7 +531,14 @@ func (s *trackSession) autoSpeedtestLoop(every time.Duration) {
 	}
 }
 
+// runSpeedtest führt genau einen Speedtest aus. Läuft bereits einer (aus Taste "s",
+// --speedtest-every oder dem Dauer-Modus), wird dieser Aufruf übersprungen.
 func (s *trackSession) runSpeedtest() {
+	if !s.speedtestRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer s.speedtestRunning.Store(false)
+
 	s.state.Update(func(sn *tui.Snapshot) { sn.LastSpeedtest = "läuft..." })
 	retryAfter, err := s.api.SpeedStart(s.ctx)
 	if err != nil {
@@ -566,6 +584,40 @@ func formatSpeedtestSummary(down, up, idle, loaded *float64) string {
 	return fmt.Sprintf("%s ↓ / %s ↑  (RTT idle %s / unter Last %s)", fmtMbps(down), fmtMbps(up), fmtMs(idle), fmtMs(loaded))
 }
 
+// toggleContinuousSpeedtest schaltet den Dauer-Speedtest-Modus um (Taste "c" bzw. beim Start
+// über --speedtest-continuous). Jedes Einschalten startet eine Schleife mit neuer Generation;
+// eine ältere Schleife beendet sich nach ihrem aktuellen Test selbst.
+func (s *trackSession) toggleContinuousSpeedtest() {
+	on := !s.continuous.Load()
+	s.continuous.Store(on)
+	gen := s.continuousGen.Add(1)
+	s.state.Update(func(sn *tui.Snapshot) { sn.SpeedtestContinuous = on })
+	if on {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.continuousSpeedtestLoop(gen)
+		}()
+	}
+}
+
+// continuousSpeedtestLoop führt Speedtests aus, solange ihre Generation aktuell ist und die
+// Fahrt läuft, mit SpeedtestContinuousPause dazwischen. Läuft gerade ein Test (Taste "s" oder
+// alte Schleife), wird dieser Durchgang übersprungen.
+func (s *trackSession) continuousSpeedtestLoop(gen int64) {
+	for s.continuousGen.Load() == gen && s.ctx.Err() == nil {
+		s.runSpeedtest()
+		if s.continuousGen.Load() != gen {
+			return
+		}
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-time.After(model.SpeedtestContinuousPause):
+		}
+	}
+}
+
 // ---------- Live-Ansicht / Tastatur ----------
 
 func (s *trackSession) renderLoop(kr *tui.KeyReader) {
@@ -599,6 +651,8 @@ func (s *trackSession) renderLoop(kr *tui.KeyReader) {
 			switch r {
 			case 's', 'S':
 				go s.runSpeedtest()
+			case 'c', 'C':
+				s.toggleContinuousSpeedtest()
 			case 'q', 'Q', 3: // Ctrl-C im Raw-Modus
 				s.cancel()
 			}

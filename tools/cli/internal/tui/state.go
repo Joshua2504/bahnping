@@ -53,7 +53,8 @@ type Snapshot struct {
 	OutboxPending int
 	UploadStatus  string
 
-	LastSpeedtest string
+	LastSpeedtest       string
+	SpeedtestContinuous bool
 
 	ConnectedWS bool
 }
