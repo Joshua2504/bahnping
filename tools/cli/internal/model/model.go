@@ -152,6 +152,9 @@ type SampleBatchResponse struct {
 // Zod validiert per "kind" als Discriminator und entfernt unbekannte Felder aus dem
 // jeweils anderen Varianten-Schema stillschweigend (kein .strict()) – daher reicht ein
 // einziger flacher Go-Typ mit allen möglichen Feldern, solange "kind" korrekt gesetzt ist.
+// Die varianten-spezifischen Felder dürfen kein omitempty haben: Zod verlangt sie als
+// Pflichtfelder (nullable, nicht optional). Sonst fallen lost=0 oder nil-Werte (z. B. ein
+// Upload ohne Ergebnis) weg und der Server verwirft das ganze Sample als "rejected".
 type Sample struct {
 	ID        string    `json:"id"`
 	Ts        int64     `json:"ts"`
@@ -173,25 +176,25 @@ type Sample struct {
 	Kind          string  `json:"kind"`
 
 	// ping_window
-	N         int      `json:"n,omitempty"`
-	Lost      int      `json:"lost,omitempty"`
-	RttMin    *float64 `json:"rttMin,omitempty"`
-	RttMedian *float64 `json:"rttMedian,omitempty"`
-	RttP90    *float64 `json:"rttP90,omitempty"`
-	RttMax    *float64 `json:"rttMax,omitempty"`
-	JitterMs  *float64 `json:"jitterMs,omitempty"`
+	N         int      `json:"n"`
+	Lost      int      `json:"lost"`
+	RttMin    *float64 `json:"rttMin"`
+	RttMedian *float64 `json:"rttMedian"`
+	RttP90    *float64 `json:"rttP90"`
+	RttMax    *float64 `json:"rttMax"`
+	JitterMs  *float64 `json:"jitterMs"`
 
 	// speedtest
-	DownBps     *float64 `json:"downBps,omitempty"`
-	UpBps       *float64 `json:"upBps,omitempty"`
-	RttIdleMs   *float64 `json:"rttIdleMs,omitempty"`
-	RttLoadedMs *float64 `json:"rttLoadedMs,omitempty"`
-	DurationMs  *int64   `json:"durationMs,omitempty"`
+	DownBps     *float64 `json:"downBps"`
+	UpBps       *float64 `json:"upBps"`
+	RttIdleMs   *float64 `json:"rttIdleMs"`
+	RttLoadedMs *float64 `json:"rttLoadedMs"`
+	DurationMs  *int64   `json:"durationMs"`
 
 	// probe
-	HttpMs  *float64 `json:"httpMs,omitempty"`
-	Ok      *bool    `json:"ok,omitempty"`
-	Captive *bool    `json:"captive,omitempty"`
+	HttpMs  *float64 `json:"httpMs"`
+	Ok      *bool    `json:"ok"`
+	Captive *bool    `json:"captive"`
 }
 
 const (

@@ -4,6 +4,7 @@
 package speedtest
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"io"
@@ -17,8 +18,12 @@ import (
 const (
 	chunkBytes = 4 * 1024 * 1024
 	streams    = model.SpeedtestStreams
-	duration   = time.Duration(model.SpeedtestDurationMs) * time.Millisecond
-	rampUp     = 1 * time.Second
+)
+
+// Variablen statt Konstanten, damit Tests die Testdauer verkürzen können.
+var (
+	duration = time.Duration(model.SpeedtestDurationMs) * time.Millisecond
+	rampUp   = 1 * time.Second
 )
 
 // Result ist das Ergebnis eines Speedtests (ohne RTT-Felder, die kennt nur der Aufrufer).
@@ -28,53 +33,57 @@ type Result struct {
 	DurationMs int64
 }
 
-// countingRampReader liest aus r und zählt total sowie die Bytes, die nach rampEnd gelesen wurden.
-type countingRampReader struct {
-	r       io.Reader
+// rampCounter zählt übertragene Bytes gesamt und getrennt die nach rampEnd übertragenen.
+type rampCounter struct {
+	mu      sync.Mutex
 	rampEnd time.Time
-	mu      *sync.Mutex
-	total   *int64
-	post    *int64
+	total   int64
+	post    int64
 }
 
-func (c *countingRampReader) discard() {
-	buf := make([]byte, 64*1024)
-	for {
-		n, err := c.r.Read(buf)
-		if n > 0 {
-			now := time.Now()
-			c.mu.Lock()
-			*c.total += int64(n)
-			if now.After(c.rampEnd) {
-				*c.post += int64(n)
-			}
-			c.mu.Unlock()
-		}
-		if err != nil {
-			return
-		}
+func (c *rampCounter) add(n int) {
+	now := time.Now()
+	c.mu.Lock()
+	c.total += int64(n)
+	if now.After(c.rampEnd) {
+		c.post += int64(n)
 	}
+	c.mu.Unlock()
+}
+
+// countingReader zählt beim Lesen mit. Beim Download sind das empfangene Bytes, beim Upload
+// die Bytes, die der HTTP-Transport gerade abschickt (wie xhr.upload.onprogress im Browser).
+type countingReader struct {
+	r io.Reader
+	c *rampCounter
+}
+
+func (cr countingReader) Read(p []byte) (int, error) {
+	n, err := cr.r.Read(p)
+	if n > 0 {
+		cr.c.add(n)
+	}
+	return n, err
 }
 
 // Download führt den Download-Teil aus (4 parallele GET /api/speed/down-Streams).
 func Download(ctx context.Context, api *apiclient.Client) *float64 {
-	deadline := time.Now().Add(duration)
-	rampEnd := time.Now().Add(rampUp)
-	var mu sync.Mutex
-	var total, post int64
+	start := time.Now()
+	// Harte Deadline: laufende Requests werden nach der Testdauer abgebrochen, sonst hängt ein
+	// langsamer 4-MiB-Block bis zum HTTP-Timeout (15 s) und verlängert den Test.
+	ctx, cancel := context.WithDeadline(ctx, start.Add(duration))
+	defer cancel()
+	counter := &rampCounter{rampEnd: start.Add(rampUp)}
 	var budgetMu sync.Mutex
 	budget := int64(model.SpeedtestMaxBytes)
-	start := time.Now()
 
 	var wg sync.WaitGroup
 	for i := 0; i < streams; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(deadline) {
-				if ctx.Err() != nil {
-					return
-				}
+			buf := make([]byte, 64*1024)
+			for ctx.Err() == nil {
 				budgetMu.Lock()
 				n := int64(chunkBytes)
 				if n > budget {
@@ -89,14 +98,13 @@ func Download(ctx context.Context, api *apiclient.Client) *float64 {
 				if err != nil {
 					return
 				}
-				(&countingRampReader{r: body, rampEnd: rampEnd, mu: &mu, total: &total, post: &post}).discard()
+				io.CopyBuffer(io.Discard, countingReader{body, counter}, buf) //nolint:errcheck // Abbruch an der Deadline ist erwartet
 				body.Close()
 			}
 		}()
 	}
 	wg.Wait()
-	elapsed := time.Since(start)
-	return bpsFromCounts(total, post, elapsed)
+	return bpsFromCounts(counter.total, counter.post, time.Since(start))
 }
 
 func bpsFromCounts(total, post int64, elapsed time.Duration) *float64 {
@@ -124,28 +132,26 @@ func randomBlock(n int) ([]byte, error) {
 
 // Upload führt den Upload-Teil aus (4 parallele POST /api/speed/up mit 4-MiB-Zufallsblöcken).
 func Upload(ctx context.Context, api *apiclient.Client) *float64 {
-	deadline := time.Now().Add(duration)
-	rampEnd := time.Now().Add(rampUp)
-	var mu sync.Mutex
-	var total, post int64
-	var budgetMu sync.Mutex
-	budget := int64(model.SpeedtestMaxBytes)
-	start := time.Now()
-
 	block, err := randomBlock(chunkBytes)
 	if err != nil {
 		return nil
 	}
+
+	start := time.Now()
+	ctx, cancel := context.WithDeadline(ctx, start.Add(duration))
+	defer cancel()
+	// Bytes werden beim Senden gezählt, nicht erst nach komplettem Block: Bei langsamem
+	// Uplink wird ein 4-MiB-Block oft gar nicht fertig, das Ergebnis wäre sonst leer.
+	counter := &rampCounter{rampEnd: start.Add(rampUp)}
+	var budgetMu sync.Mutex
+	budget := int64(model.SpeedtestMaxBytes)
 
 	var wg sync.WaitGroup
 	for i := 0; i < streams; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for time.Now().Before(deadline) {
-				if ctx.Err() != nil {
-					return
-				}
+			for ctx.Err() == nil {
 				budgetMu.Lock()
 				n := int64(len(block))
 				if n > budget {
@@ -156,46 +162,15 @@ func Upload(ctx context.Context, api *apiclient.Client) *float64 {
 				if n <= 0 {
 					return
 				}
-				chunk := block
-				if n != int64(len(block)) {
-					chunk = block[:n]
-				}
-				reqStart := time.Now()
-				if err := api.SpeedUp(ctx, byteReader(chunk), n); err != nil {
+				body := countingReader{bytes.NewReader(block[:n]), counter}
+				if err := api.SpeedUp(ctx, body, n); err != nil {
 					return
 				}
-				now := time.Now()
-				mu.Lock()
-				total += n
-				// Konservativ: Request wird dem Post-Ramp-Topf zugerechnet, wenn er
-				// (überwiegend) nach Ablauf der Ramp-up-Sekunde beendet wurde.
-				if now.After(rampEnd) && reqStart.After(rampEnd) {
-					post += n
-				}
-				mu.Unlock()
 			}
 		}()
 	}
 	wg.Wait()
-	elapsed := time.Since(start)
-	return bpsFromCounts(total, post, elapsed)
-}
-
-func byteReader(b []byte) io.Reader {
-	return io.NopCloser(io.Reader(onceReader{b}))
-}
-
-// onceReader liest einen Byte-Slice einmal komplett (einfacher als bytes.Reader zu importieren,
-// aber äquivalent – hier nur zur klaren Intention, dass der Block nicht wiederverwendet wird).
-type onceReader struct{ b []byte }
-
-func (o onceReader) Read(p []byte) (int, error) {
-	if len(o.b) == 0 {
-		return 0, io.EOF
-	}
-	n := copy(p, o.b)
-	o.b = o.b[n:]
-	return n, nil
+	return bpsFromCounts(counter.total, counter.post, time.Since(start))
 }
 
 // Run führt Download- und Upload-Test hintereinander aus und liefert ein Result.

@@ -26,7 +26,8 @@ export function registerSpeedRoutes(app: FastifyInstance): void {
       }
     });
     payload.on('end', () => finish(null));
-    payload.on('error', (err) => finish(err));
+    // Abbruch durch den Client (Testdauer abgelaufen) ist erwartet und kein Serverfehler.
+    payload.on('error', (err) => finish(Object.assign(err, { statusCode: 400 })));
   });
 
   app.post('/api/speed/start', { preHandler: app.requireAuth }, async (request, reply) => {
