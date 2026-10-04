@@ -10,6 +10,7 @@
 	import { ApiError, api } from '#lib/api.js';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { rttColorExpression } from '#lib/map/colors.js';
+	import { attachHoverPopup } from '#lib/map/hover-popup.js';
 	import { i18n, iceStateLabel, netClassLabel } from '#lib/i18n.svelte.js';
 
 	const de = {
@@ -80,7 +81,7 @@
 	let loadError = $state<string | null>(null);
 
 	let map: maplibregl.Map | null = null;
-	let popup: maplibregl.Popup | null = null;
+	let detachPopup: (() => void) | null = null;
 	let created = false;
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
 	let observer: IntersectionObserver | null = null;
@@ -219,20 +220,13 @@
 			),
 		});
 		map = m;
-		m.on('click', 'live-trains-circle', (e) => {
-			const f = e.features?.[0];
-			if (!f) return;
-			popup?.remove();
-			popup = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(popupHtml(f.properties as Record<string, unknown>)).addTo(m);
-		});
-		m.on('mouseenter', 'live-trains-circle', () => (m.getCanvas().style.cursor = 'pointer'));
-		m.on('mouseleave', 'live-trains-circle', () => (m.getCanvas().style.cursor = ''));
+		detachPopup = attachHoverPopup(m, ['live-trains-circle'], (f) => popupHtml(f.properties as Record<string, unknown>));
 	}
 
 	function teardownMap(): void {
 		stopPolling();
-		popup?.remove();
-		popup = null;
+		detachPopup?.();
+		detachPopup = null;
 		map?.remove();
 		map = null;
 		created = false;

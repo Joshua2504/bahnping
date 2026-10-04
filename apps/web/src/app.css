@@ -448,40 +448,47 @@ th {
 	font-size: 0.8rem;
 }
 
-/* MapLibre-Popups an das Farbschema anpassen. */
-.maplibregl-popup-content {
+/* MapLibre-Popups an das Farbschema anpassen. `.maplibregl-map` davor, weil maplibre-gl.css erst
+   mit den Karten-Komponenten (also nach dieser Datei) geladen wird und sonst gewinnt. */
+.maplibregl-map .maplibregl-popup-content {
 	background: var(--bg-card);
 	color: var(--fg);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-sm);
 	box-shadow: var(--shadow);
 	font-size: 0.85rem;
+	padding: 0.6rem 0.75rem;
 }
 
-.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
 	border-top-color: var(--bg-card);
 }
 
-.maplibregl-popup-anchor-top .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
-.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
 	border-bottom-color: var(--bg-card);
 }
 
-.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
 	border-right-color: var(--bg-card);
 }
 
-.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
 	border-left-color: var(--bg-card);
 }
 
-.maplibregl-popup-close-button {
+.maplibregl-map .maplibregl-popup-close-button {
 	color: var(--fg-dim);
 	font-size: 1.1rem;
 	padding: 0 0.4rem;
+}
+
+/* Hover-Popups dürfen die Maus nicht abfangen, sonst flackern sie über dem Punkt. */
+.maplibregl-map .map-hover-popup {
+	pointer-events: none;
 }
 
 /* ---------- Fahrt-Modus: Vollbild, OLED-Schwarz (unabhängig vom Farbschema) ---------- */

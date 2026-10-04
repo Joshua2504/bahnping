@@ -27,3 +27,26 @@ export function rttColor(rttMs: number | null): string {
 	if (rttMs < 500) return '#f97316';
 	return '#ef4444';
 }
+
+/**
+ * Tempo-Skala (km/h): kühl (langsam) → hell (schnell). Bewusst andere Farben als die RTT-Ampel,
+ * damit beide Kartenmodi nicht verwechselt werden.
+ */
+const SPEED_STOPS: [number, string][] = [
+	[0, '#64748b'],
+	[60, '#a855f7'],
+	[140, '#3b82f6'],
+	[220, '#06b6d4'],
+	[300, '#a7f3d0'],
+];
+
+/** km/h → Farbe als MapLibre-Expression (lineare Interpolation über {@link SPEED_STOPS}). */
+export function speedColorExpression(property: string): ExpressionSpecification {
+	return ['interpolate', ['linear'], ['get', property], ...SPEED_STOPS.flat()] as unknown as ExpressionSpecification;
+}
+
+/** CSS-Verlauf für die Tempo-Legende, konsistent mit {@link speedColorExpression}. */
+export const SPEED_GRADIENT = `linear-gradient(90deg, ${SPEED_STOPS.map(([v, c]) => `${c} ${(v / 300) * 100}%`).join(', ')})`;
+
+/** Farbe der Speedtest-Markierungen (Ring an der Strecke, Badge daneben). */
+export const SPEEDTEST_COLOR = '#38bdf8';

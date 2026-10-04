@@ -14,7 +14,8 @@
 	import { ApiError, api, type TripSampleExt, type TripSamplesExt } from '#lib/api.js';
 	import type { TripStop } from '@bahn/shared';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
-	import { RTT_LEGEND, rttColor, rttColorExpression } from '#lib/map/colors.js';
+	import { RTT_LEGEND, rttColor, rttColorExpression, SPEED_GRADIENT, SPEEDTEST_COLOR, speedColorExpression } from '#lib/map/colors.js';
+	import { attachHoverPopup } from '#lib/map/hover-popup.js';
 	import { median, percentile } from '#lib/tracker/util.js';
 	import { theme } from '#lib/theme.svelte.js';
 
@@ -38,12 +39,14 @@
 	let chartContainer: HTMLDivElement | undefined = $state(undefined);
 	let map: maplibregl.Map | null = null;
 	let mapTheme: string | null = null;
-	let popup: maplibregl.Popup | null = null;
+	// Färbung der Streckenpunkte: Latenz (Standard) oder Tempo.
+	let mapMode = $state<'rtt' | 'speed'>('rtt');
 	let chart: uPlot | null = null;
 	let chartObserver: ResizeObserver | null = null;
 	let chartWidth = $state(0);
 
 	const RTT_COLOR = rttColorExpression('rtt');
+	const SPEED_COLOR = speedColorExpression('speedKmh');
 
 	const de = {
 		pageTitle: 'Fahrtdetail',
@@ -92,6 +95,12 @@
 		popupSpeed: 'Tempo',
 		popupNet: 'Netz',
 		popupIce: 'ICE',
+		popupDown: 'Download',
+		popupUp: 'Upload',
+		modeLatency: 'Latenz',
+		modeSpeed: 'Tempo',
+		mapModeLabel: 'Kartenfärbung',
+		noSpeed: 'kein Tempo',
 		unitChip: (v: string) => `Tz ${v}`,
 		classChip: (v: string) => `BR ${v}`,
 		inLabel: 'in',
@@ -149,6 +158,12 @@
 		popupSpeed: 'Speed',
 		popupNet: 'Network',
 		popupIce: 'ICE',
+		popupDown: 'Download',
+		popupUp: 'Upload',
+		modeLatency: 'Latency',
+		modeSpeed: 'Speed',
+		mapModeLabel: 'Map colouring',
+		noSpeed: 'no speed',
 		unitChip: (v: string) => `Unit ${v}`,
 		classChip: (v: string) => `Class ${v}`,
 		inLabel: 'in',
@@ -451,6 +466,19 @@
 		};
 	}
 
+	function speedtestLabel(down: number | null, up: number | null): string {
+		const parts: string[] = [];
+		if (down !== null) parts.push(`↓ ${fmtNumber(down / 1_000_000, 1)}`);
+		if (up !== null) parts.push(`↑ ${fmtNumber(up / 1_000_000, 1)}`);
+		return parts.length > 0 ? `${parts.join('  ')} Mbit/s` : '–';
+	}
+
+	/** Farbe der Streckenpunkte je Kartenmodus; Punkte ohne Wert werden grau. */
+	function pointColor(mode: 'rtt' | 'speed'): maplibregl.ExpressionSpecification {
+		if (mode === 'speed') return ['case', ['==', ['typeof', ['get', 'speedKmh']], 'number'], SPEED_COLOR, '#94a3b8'];
+		return ['case', ['get', 'fullLoss'], '#ef4444', ['==', ['typeof', ['get', 'rtt']], 'number'], RTT_COLOR, '#94a3b8'];
+	}
+
 	function pointGeoJson() {
 		const samples = (data?.samples ?? []).filter((s) => s.lat !== null && s.lon !== null);
 		return {
@@ -471,6 +499,10 @@
 					iceState: s.iceState,
 					fullLoss: (s.n !== null && s.n > 0 && s.lost === s.n) || s.ok === false,
 					last: i === samples.length - 1,
+					downBps: s.downBps,
+					upBps: s.upBps,
+					// Badge-Text neben der Strecke, z.B. "↓ 4,3  ↑ 1,2".
+					dlLabel: s.kind === 'speedtest' ? speedtestLabel(s.downBps, s.upBps) : null,
 				},
 				geometry: { type: 'Point' as const, coordinates: [s.lon as number, s.lat as number] },
 			})),
@@ -545,29 +577,44 @@
 					filter: ['!=', ['get', 'kind'], 'speedtest'],
 					paint: {
 						'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 5, 16, 7],
-						'circle-color': [
-							'case',
-							['get', 'fullLoss'],
-							'#ef4444',
-							['==', ['typeof', ['get', 'rtt']], 'number'],
-							RTT_COLOR,
-							'#94a3b8',
-						],
+						'circle-color': pointColor(mapMode),
 						'circle-stroke-color': ['case', ['get', 'fullLoss'], dark ? '#000000' : '#7f1d1d', stroke],
 						'circle-stroke-width': ['case', ['get', 'fullLoss'], 1.5, 0.75],
 					},
 				},
 				{
+					// Speedtests: dezenter Ring auf der Strecke, Werte als Badge daneben.
 					id: 'route-speedtests',
 					type: 'circle',
 					source: 'route',
 					filter: ['==', ['get', 'kind'], 'speedtest'],
 					paint: {
-						'circle-radius': 8,
-						'circle-color': '#38bdf8',
-						'circle-stroke-color': stroke,
-						'circle-stroke-width': 2,
+						'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 6, 16, 8],
+						'circle-color': 'rgba(0, 0, 0, 0)',
+						'circle-stroke-color': SPEEDTEST_COLOR,
+						'circle-stroke-width': 2.5,
 					},
+				},
+				{
+					id: 'route-speedtest-badges',
+					type: 'symbol',
+					source: 'route',
+					filter: ['==', ['get', 'kind'], 'speedtest'],
+					layout: {
+						'text-field': ['get', 'dlLabel'],
+						'text-font': ['Noto Sans Medium'],
+						'text-size': 11.5,
+						// Links oder rechts neben dem Punkt, je nachdem, wo Platz ist.
+						'text-variable-anchor': ['left', 'right'],
+						'text-radial-offset': 1.3,
+						'text-justify': 'auto',
+						'icon-image': 'speedtest-badge',
+						'icon-text-fit': 'both',
+						'icon-text-fit-padding': [3, 7, 3, 7],
+						// Bei Platzmangel zuerst die schnellsten Tests zeigen.
+						'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'downBps'], 0]],
+					},
+					paint: { 'text-color': '#ffffff' },
 				},
 				...(isLive
 					? ([
@@ -617,15 +664,18 @@
 			mapContainer?.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
 		});
 		m.on('dragstart', () => (follow = false));
-		m.on('click', 'route-points', (e) => {
-			const f = e.features?.[0];
-			if (!f) return;
+		// Badge-Hintergrund für Speedtests; nach setStyle() (Farbmodus) erneut angefordert.
+		m.on('styleimagemissing', (e) => {
+			if (e.id === 'speedtest-badge' && !m.hasImage(e.id)) addBadgeImage(m);
+		});
+		attachHoverPopup(m, ['route-speedtest-badges', 'route-speedtests', 'route-points'], (f) => {
 			const p = f.properties as Record<string, unknown>;
 			// `m` ist hier die Karte; Texte daher über `txt`.
 			const txt = i18n.locale === 'de' ? de : en;
+			if (p.kind === 'speedtest') return speedtestPopupHtml(p, txt);
 			const rtt = p.rtt === null || p.rtt === undefined || p.rtt === 'null' ? null : Number(p.rtt);
 			const ice = typeof p.iceState === 'string' && p.iceState !== 'null' ? iceStateLabel(p.iceState) : null;
-			const html = `
+			return `
 				<div class="trip-popup">
 					<div class="trip-popup__time">${timeLabel(p.ts as string, true)}</div>
 					<div class="trip-popup__rtt"><span style="background:${rttColor(rtt)}"></span>${rtt !== null ? `${fmtNumber(rtt)} ms` : txt.noLatency}${rtt !== null && p.latencyKind === 'HTTP' ? ' <em>HTTP</em>' : ''}</div>
@@ -637,11 +687,43 @@
 					</dl>
 				</div>
 			`;
-			popup?.remove();
-			popup = new maplibregl.Popup({ maxWidth: '260px' }).setLngLat(e.lngLat).setHTML(html).addTo(m);
 		});
-		m.on('mouseenter', 'route-points', () => (m.getCanvas().style.cursor = 'pointer'));
-		m.on('mouseleave', 'route-points', () => (m.getCanvas().style.cursor = ''));
+	}
+
+	/** Abgerundetes, dehnbares Badge als Hintergrund der Speedtest-Werte (per Canvas, keine externen Bilder). */
+	function addBadgeImage(m: maplibregl.Map): void {
+		const ratio = 2;
+		const r = 8 * ratio;
+		const size = 2 * r + 2 * ratio;
+		const canvas = document.createElement('canvas');
+		canvas.width = size;
+		canvas.height = size;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
+		ctx.fillStyle = '#0369a1';
+		ctx.beginPath();
+		ctx.roundRect(0, 0, size, size, r);
+		ctx.fill();
+		m.addImage('speedtest-badge', ctx.getImageData(0, 0, size, size), {
+			pixelRatio: ratio,
+			stretchX: [[r, size - r]],
+			stretchY: [[r, size - r]],
+		});
+	}
+
+	function speedtestPopupHtml(p: Record<string, unknown>, txt: typeof de): string {
+		const val = (v: unknown) => (typeof v === 'number' ? `${fmtNumber(v / 1_000_000, 1)} Mbit/s` : '–');
+		return `
+			<div class="trip-popup">
+				<div class="trip-popup__time">${timeLabel(p.ts as string, true)}</div>
+				<div class="trip-popup__rtt"><span style="background:${SPEEDTEST_COLOR}"></span>${txt.speedtest}</div>
+				<dl>
+					<dt>${txt.popupDown}</dt><dd>${val(p.downBps)}</dd>
+					<dt>${txt.popupUp}</dt><dd>${val(p.upBps)}</dd>
+					<dt>${txt.popupNet}</dt><dd>${netClassLabel(p.netClass as string)}${p.asn && p.asn !== 'null' ? ` · AS${p.asn}` : ''}</dd>
+				</dl>
+			</div>
+		`;
 	}
 
 	/** Aktualisiert die Streckenpunkte einer bereits erzeugten Karte (nach inkrementellem Nachladen). */
@@ -764,6 +846,14 @@
 				mapTheme = t;
 				map.setStyle(mapStyle(), { diff: false });
 			}
+		});
+	});
+
+	// Kartenmodus (Latenz/Tempo) umgeschaltet: nur die Punktfarbe tauschen, kein neuer Style.
+	$effect(() => {
+		const mode = mapMode;
+		untrack(() => {
+			if (map?.getLayer('route-points')) map.setPaintProperty('route-points', 'circle-color', pointColor(mode));
 		});
 	});
 
@@ -963,13 +1053,23 @@
 					{m.route}
 				</button>
 			{/if}
+			<div class="map-switch" role="group" aria-label={m.mapModeLabel}>
+				<button class:on={mapMode === 'rtt'} aria-pressed={mapMode === 'rtt'} onclick={() => (mapMode = 'rtt')}>{m.modeLatency}</button>
+				<button class:on={mapMode === 'speed'} aria-pressed={mapMode === 'speed'} onclick={() => (mapMode = 'speed')}>{m.modeSpeed}</button>
+			</div>
 		</div>
 		<div class="map-card__overlay map-card__overlay--bottom">
 			<div class="legend">
-				{#each RTT_LEGEND as l (l.label)}
-					<span class="legend__item"><span class="legend__swatch" style="background: {l.color}"></span>{l.label}</span>
-				{/each}
-				<span class="legend__item"><span class="legend__swatch legend__swatch--ring" style="background: #38bdf8"></span>{m.speedtest}</span>
+				{#if mapMode === 'speed'}
+					<span class="legend__item legend__scale">
+						0<span class="legend__bar" style="background: {SPEED_GRADIENT}"></span>300 km/h
+					</span>
+				{:else}
+					{#each RTT_LEGEND as l (l.label)}
+						<span class="legend__item"><span class="legend__swatch" style="background: {l.color}"></span>{l.label}</span>
+					{/each}
+				{/if}
+				<span class="legend__item"><span class="legend__swatch legend__swatch--ring" style="border-color: {SPEEDTEST_COLOR}"></span>{m.speedtest}</span>
 			</div>
 		</div>
 	</section>
@@ -1462,7 +1562,47 @@
 	}
 
 	.legend__swatch--ring {
-		box-shadow: 0 0 0 2px var(--bg-card);
+		border: 2px solid;
+		background: transparent;
+	}
+
+	.legend__bar {
+		display: inline-block;
+		width: 5rem;
+		height: 0.45rem;
+		border-radius: 999px;
+	}
+
+	.map-switch {
+		pointer-events: auto;
+		display: inline-flex;
+		margin-left: 0.4rem;
+		padding: 0.2rem;
+		gap: 0.15rem;
+		border-radius: 999px;
+		background: var(--bg-elevated);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid var(--border);
+		box-shadow: var(--shadow);
+	}
+
+	.map-switch button {
+		border: 0;
+		background: transparent;
+		color: var(--fg-dim);
+		font: inherit;
+		font-size: 0.8rem;
+		font-weight: 600;
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		cursor: pointer;
+		min-height: 28px;
+	}
+
+	.map-switch button.on {
+		background: #0284c7;
+		color: #fff;
 	}
 
 	.map-card :global(.maplibregl-ctrl-group) {

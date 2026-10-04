@@ -6,6 +6,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { createBaseStyle, DEFAULT_CENTER, DEFAULT_ZOOM, ensurePmtilesProtocol } from '#lib/map/basemap.js';
 	import { RTT_LEGEND, rttColorExpression } from '#lib/map/colors.js';
+	import { attachHoverPopup } from '#lib/map/hover-popup.js';
 	import {
 		METRICS,
 		NET_CLASSES,
@@ -120,7 +121,6 @@
 
 	let mapContainer: HTMLDivElement | undefined = $state(undefined);
 	let map: maplibregl.Map | null = null;
-	let popup: maplibregl.Popup | null = null;
 	let mapReady = $state(false);
 
 	let metric = $state<Metric>('rtt');
@@ -268,9 +268,7 @@
 		});
 		m.on('moveend', scheduleFetch);
 
-		m.on('click', 'cells-fill', (e) => {
-			const f = e.features?.[0];
-			if (!f) return;
+		attachHoverPopup(m, ['cells-fill'], (f) => {
 			const p = f.properties as Record<string, number | string | null>;
 			const html = `
 				<strong>${t.popup.trips(p.nTrips ?? 0)} · ${t.popup.samples(p.nSamples ?? 0)}</strong><br />
@@ -280,11 +278,8 @@
 				${t.popup.down}: ${p.down ? (Number(p.down) / 1_000_000).toFixed(1) + ' Mbit/s' : t.popup.dash}<br />
 				${t.popup.up}: ${p.up ? (Number(p.up) / 1_000_000).toFixed(1) + ' Mbit/s' : t.popup.dash}
 			`;
-			popup?.remove();
-			popup = new maplibregl.Popup().setLngLat(e.lngLat).setHTML(html).addTo(m);
+			return html;
 		});
-		m.on('mouseenter', 'cells-fill', () => (m.getCanvas().style.cursor = 'pointer'));
-		m.on('mouseleave', 'cells-fill', () => (m.getCanvas().style.cursor = ''));
 	});
 
 	onDestroy(() => {
