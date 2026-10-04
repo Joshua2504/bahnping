@@ -13,10 +13,19 @@ const Env = z.object({
   MAIL_FROM: z.string().default('Bahn-Netzwerk-Tracker <noreply@bahn-tracker.local>'),
   MAILPIT_UPSTREAM: z.string().optional(),
   APP_SECRET: z.string().min(32),
+  /**
+   * "false" = X-Forwarded-For ignorieren, "true" = jedem Proxy vertrauen (nur wenn die API nicht direkt
+   * erreichbar ist), sonst kommagetrennte IPs/CIDRs der vertrauenswürdigen Proxys, z.B. "172.20.0.1".
+   */
   TRUST_PROXY: z
     .string()
     .default('false')
-    .transform((v) => v === 'true' || v === '1'),
+    .transform((v): boolean | string => {
+      const t = v.trim();
+      if (t === '' || t === 'false' || t === '0') return false;
+      if (t === 'true' || t === '1') return true;
+      return t;
+    }),
   PUBLIC_MIN_TRIPS: z.coerce.number().int().min(1).default(3),
   IPTOASN_URL: z.string().optional(),
   IPTOASN_CACHE: z.string().default('.run/ip2asn-combined.tsv.gz'),
