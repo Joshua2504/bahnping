@@ -1,9 +1,10 @@
 <script lang="ts">
-	// Öffentliche Statistikseite: Gesamtzahlen + Kennzahlen je Netzklasse, aus /api/public/stats.
+	// Öffentliche Statistikseite: Gesamtzahlen + Kennzahlen je Netzklasse, aus /api/public/stats,
+	// dazu die letzten öffentlichen Fahrten aus /api/public/trips.
 	import { onMount } from 'svelte';
-	import { type PublicStats } from '@bahn/shared';
+	import { type PublicStats, type Trip } from '@bahn/shared';
 	import { ApiError, api } from '#lib/api.js';
-	import { i18n, iceStateLabel, netClassLabel } from '#lib/i18n.svelte.js';
+	import { fmtDateTime, i18n, iceStateLabel, netClassLabel, trainTypeLabel } from '#lib/i18n.svelte.js';
 
 	const de = {
 		title: 'Statistik',
@@ -29,8 +30,14 @@
 		avail: 'Verfügbarkeit',
 		measureWindows: 'Messfenster',
 		availNote: 'Verfügbarkeit: Anteil der 10-Sekunden-Messfenster mit mindestens einer Ping-Antwort.',
+		recentTrips: 'Letzte Fahrten',
+		recentIntro: 'Solange die Datenbasis klein ist, sind einzelne Fahrten öffentlich (ohne Namen oder Konto).',
+		train: 'Zug',
+		route: 'Strecke',
+		start: 'Beginn',
+		live: 'läuft',
 		footerPre: 'Live-Übersicht und Karte unter ',
-		footerPost: '. Angaben ohne personenbezogene Daten; Zellen mit zu wenigen Fahrten erscheinen dort nicht.',
+		footerPost: '. Angaben ohne Namen oder Kontodaten.',
 	};
 	const en: typeof de = {
 		title: 'Statistics',
@@ -56,13 +63,20 @@
 		avail: 'Availability',
 		measureWindows: 'Measurement windows',
 		availNote: 'Availability: share of 10-second measurement windows with at least one ping reply.',
+		recentTrips: 'Recent rides',
+		recentIntro: 'While the dataset is still small, individual rides are public (without names or accounts).',
+		train: 'Train',
+		route: 'Route',
+		start: 'Start',
+		live: 'live',
 		footerPre: 'Live overview and map at ',
-		footerPost: '. Figures contain no personal data; cells with too few rides do not appear there.',
+		footerPost: '. Figures without names or account data.',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
 
 	let data = $state<PublicStats | null>(null);
 	let loadError = $state<string | null>(null);
+	let trips = $state<Trip[]>([]);
 
 	function fmt(value: number | null, digits = 0, suffix = ''): string {
 		return value === null ? '–' : `${value.toFixed(digits)}${suffix}`;
@@ -72,7 +86,16 @@
 		return bps === null ? '–' : `${(bps / 1_000_000).toFixed(1)} Mbit/s`;
 	}
 
+	function tripLabel(t: Trip): string {
+		return t.trainNumber ? `${trainTypeLabel(t.trainType)} ${t.trainNumber}` : trainTypeLabel(t.trainType);
+	}
+
 	onMount(async () => {
+		// Fahrtliste unabhängig laden, ein Fehler dort soll die Statistik nicht verdecken.
+		api.publicTrips().then(
+			(rows) => (trips = rows),
+			() => {},
+		);
 		try {
 			data = await api.publicStats();
 		} catch (err) {
@@ -189,6 +212,35 @@
 			<p>{m.availNote}</p>
 		{/if}
 	</div>
+
+	{#if trips.length > 0}
+		<div class="card">
+			<h2>{m.recentTrips}</h2>
+			<p>{m.recentIntro}</p>
+			<div style="overflow-x: auto">
+				<table>
+					<thead>
+						<tr>
+							<th>{m.train}</th>
+							<th>{m.route}</th>
+							<th>{m.start}</th>
+							<th>{m.samples}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each trips as t (t.id)}
+							<tr>
+								<td><a href="/trips/{t.id}">{tripLabel(t)}</a>{#if t.status === 'active'} · {m.live}{/if}</td>
+								<td>{t.originName && t.destinationName ? `${t.originName} → ${t.destinationName}` : '–'}</td>
+								<td>{fmtDateTime(t.startedAt)}</td>
+								<td>{t.sampleCount ?? '–'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{/if}
 
 	<div class="card">
 		<p>

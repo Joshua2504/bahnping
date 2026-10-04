@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { createHmac } from 'node:crypto';
-import { CellsQuery, ICE_STATE_ORDER, LIVE_CACHE_MS, LIVE_NET_WINDOW_MS, LIVE_POSITION_MAX_AGE_MS, type CellRow, type NetClass, type PublicLive, type TrainType } from '@bahn/shared';
+import { CellsQuery, ICE_STATE_ORDER, LIVE_CACHE_MS, LIVE_NET_WINDOW_MS, LIVE_POSITION_MAX_AGE_MS, type CellRow, type NetClass, type PublicLive, type TrainType, type Trip } from '@bahn/shared';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { deriveKey } from '../lib/hmac.js';
 import { summarizeLiveTrains, type LiveTripRow } from '../lib/liveTrains.js';
 
 const EXCLUDED_FLAGS = ['out_of_bbox', 'bad_accuracy', 'implausible_speed', 'net_sig_invalid'];
+const PUBLIC_TRIPS_LIMIT = 100;
 const PERIOD_INTERVAL: Record<string, string> = { '7d': '7 days', '30d': '30 days', '365d': '365 days' };
 
 export function registerPublicRoutes(app: FastifyInstance): void {
@@ -158,6 +159,55 @@ export function registerPublicRoutes(app: FastifyInstance): void {
         rttMedian: r.rtt_median,
       })),
     });
+  });
+
+  // Letzte Fahrten ohne Nutzerdaten. Solange die Datenbasis klein ist, sind einzelne Fahrten
+  // öffentlich (siehe docs/PLANUNG.md, Abschnitt 10). Gesperrte Fahrten und Nutzer mit
+  // „Live öffentlich“ aus bleiben draußen.
+  app.get('/api/public/trips', async (_request, reply) => {
+    const rows = await dbClient<
+      {
+        id: string;
+        train_type: string;
+        train_number: string | null;
+        platform: string;
+        started_at: Date | string;
+        ended_at: Date | string | null;
+        status: string;
+        sample_count: number;
+        ice_tzn: string | null;
+        ice_series: string | null;
+        trip_date: string | null;
+        origin_name: string | null;
+        destination_name: string | null;
+      }[]
+    >`
+      SELECT t.id, t.train_type, t.train_number, t.platform, t.started_at, t.ended_at, t.status,
+        (SELECT count(*)::int FROM samples s WHERE s.trip_id = t.id) AS sample_count,
+        t.ice_tzn, t.ice_series, t.trip_date, t.origin_name, t.destination_name
+      FROM trips t
+      JOIN users u ON u.id = t.user_id
+      WHERE t.status <> 'flagged' AND u.live_public = true AND u.deleted_at IS NULL
+        AND EXISTS (SELECT 1 FROM samples s WHERE s.trip_id = t.id)
+      ORDER BY t.started_at DESC
+      LIMIT ${PUBLIC_TRIPS_LIMIT}
+    `;
+    const body: Trip[] = rows.map((r) => ({
+      id: r.id,
+      trainType: r.train_type as Trip['trainType'],
+      trainNumber: r.train_number,
+      platform: r.platform,
+      startedAt: new Date(r.started_at).toISOString(),
+      endedAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
+      status: r.status as Trip['status'],
+      sampleCount: r.sample_count,
+      iceTzn: r.ice_tzn,
+      iceSeries: r.ice_series,
+      tripDate: r.trip_date,
+      originName: r.origin_name,
+      destinationName: r.destination_name,
+    }));
+    reply.header('cache-control', 'public, max-age=30').send(body);
   });
 
   // In-Memory-Cache: die Live-Karte wird von vielen Besuchern alle 15s abgerufen, eine einzelne

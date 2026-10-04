@@ -12,8 +12,9 @@ Paketverlust, Standort, der Status des ICE-Portals und auf Wunsch der Durchsatz 
   Zuordnung zum Netzbetreiber (ASN) genutzt.
 - Komplett selbst gehostet: Karte (PMTiles), Schriften, Captcha (ALTCHA), Mail. Der Browser spricht keine
   Drittanbieter an.
-- Öffentlich erscheinen nur Aggregate über mehrere Fahrten. Einzelne Fahrten sind nur über ihren
-  (nicht erratbaren) Link sichtbar.
+- Solange die Datenbasis klein ist, ist alles sofort öffentlich: Karte ohne Mindestanzahl an Fahrten,
+  einzelne Fahrten mit Strecke und Zeitpunkten (Liste auf `/stats`), aber ohne Namen oder Konto. Die
+  Positionen liegen ohnehin auf den Gleisen. Später wieder Aggregate mit `PUBLIC_MIN_TRIPS > 1`.
 
 ## Aufbau
 

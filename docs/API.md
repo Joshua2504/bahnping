@@ -156,6 +156,10 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   `down/up` = Median der Speedtests (null wenn keine). Zellen mit `nTrips < PUBLIC_MIN_TRIPS` werden
   weggelassen, außer `mine=true` und eingeloggt (dann nur eigene Samples). bbox begrenzt die Zellen über
   lat/lon der Samples. Antwort `Cache-Control: public, max-age=60`.
+- `GET /api/public/trips` → `200 Trip[]` (mit `sampleCount`), die letzten 100 Fahrten nach `startedAt`
+  absteigend, ohne Nutzerdaten. Nur Fahrten mit mindestens einem Sample, ohne `status='flagged'` und nur
+  von Nutzern mit `live_public=true`. Details über `GET /api/trips/:id/samples`.
+  Antwort `Cache-Control: public, max-age=30`.
 - `GET /api/public/stats` → `200 PublicStats` (`{ totals, byNet, byIceState }`).
   - `byIceState`: je ICE-Portal-Prognose (`connectivity.currentState`, groß geschrieben) über alle
     `ping_window`-Samples mit gesetztem `iceState` (ohne ausgeschlossene Flags): `nSamples`, `nTrips`,

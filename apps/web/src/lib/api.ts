@@ -151,6 +151,7 @@ export const api = {
 		return request(`/api/public/cells?${params.toString()}`, {}, CellsResponse);
 	},
 	publicStats: () => request('/api/public/stats', {}, PublicStats),
+	publicTrips: () => request('/api/public/trips', {}, z.array(Trip)),
 	publicLive: () => request('/api/public/live', {}, PublicLive),
 
 	adminAsns: (filter: 'unknown' | 'all') =>

@@ -362,9 +362,12 @@ mit Ablauf und Einmal-Verwendung (Replay-Schutz).
   Access-Log aus oder `remote_ip` per Log-Filter entfernt; Fastify-Logger ohne `req.ip`/Header; Postgres
   loggt keine Clientdaten; Fehler-Tracking (falls GlitchTip) mit IP-Scrubbing. Das ist ein Grund für
   Self-Hosting ohne Cloudflare/CDN.
-- **Bewegungsprofile:** Einzelne Fahrten sind **privat** (nur für die Person selbst sichtbar). Öffentlich sind
-  nur Aggregate je Zelle/Segment mit **k-Anonymität** (`n_trips ≥ 3`) und **Verzögerung** (frühestens
-  60 min nach Messung, Standard: tägliche Aggregation). Die Live-Ansicht zeigt nur Zähler, keine Positionen.
+- **Bewegungsprofile:** Aktuell (kleine Datenbasis, Entscheidung 2026-10) ist **alles sofort öffentlich**:
+  Zellen ohne Mindestanzahl (`PUBLIC_MIN_TRIPS=1`), keine Verzögerung, einzelne Fahrten mit Strecke und
+  Zeitpunkten über `/api/public/trips` und `/trips/:id`, ohne Namen/Konto. Begründung: Die Positionen
+  liegen auf Bahngleisen und sagen über die Person kaum etwas aus. Ausgenommen sind gesperrte Fahrten und
+  Nutzer mit „Live öffentlich“ aus. Später (ab ca. 100 Fahrten) wieder Aggregate mit
+  **k-Anonymität** (`n_trips ≥ 3`) und ggf. **Verzögerung**.
 - Öffentlicher Name erscheint nur in der Opt-in-Rangliste (Anzahl Fahrten/Messungen), nie an Orten/Zeiten.
 - Konto löschen (sofort, inkl. Samples), Export (JSON/GPX), Einwilligungstexte, Datenschutzerklärung,
   Impressum, AV-Vertrag mit dem Hoster, Verzeichnis der Verarbeitungstätigkeiten.

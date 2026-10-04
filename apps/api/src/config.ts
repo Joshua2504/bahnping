@@ -26,7 +26,7 @@ const Env = z.object({
       if (t === 'true' || t === '1') return true;
       return t;
     }),
-  PUBLIC_MIN_TRIPS: z.coerce.number().int().min(1).default(3),
+  PUBLIC_MIN_TRIPS: z.coerce.number().int().min(1).default(1),
   IPTOASN_URL: z.string().optional(),
   IPTOASN_CACHE: z.string().default('.run/ip2asn-combined.tsv.gz'),
   NETCLASS_OVERRIDES: z.string().default(''),

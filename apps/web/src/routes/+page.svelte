@@ -15,10 +15,10 @@
 
 	const de = {
 		intro1:
-			'Dieses Projekt misst, wie gut das Netz in Zügen tatsächlich ist – getrennt nach DB-WLAN und eigenem Mobilfunk. Während einer Fahrt werden Latenz, Paketverlust, Standort und auf Wunsch die Durchsatzgeschwindigkeit erfasst und anonymisiert als Heatmap veröffentlicht.',
+			'Dieses Projekt misst, wie gut das Netz in Zügen tatsächlich ist – getrennt nach DB-WLAN und eigenem Mobilfunk. Während einer Fahrt werden Latenz, Paketverlust, Standort und auf Wunsch die Durchsatzgeschwindigkeit erfasst und ohne Personenbezug als Heatmap und Fahrtliste veröffentlicht.',
 		privacyLabel: 'Datenschutz:',
 		intro2:
-			'IP-Adressen werden nie gespeichert, sondern nur für den Moment der Anfrage im Arbeitsspeicher verwendet, um grob den Netzbetreiber zu bestimmen. Veröffentlicht werden ausschließlich Aggregate über mehrere Fahrten hinweg, nie einzelne Positionen oder Zeitstempel.',
+			'IP-Adressen werden nie gespeichert, sondern nur für den Moment der Anfrage im Arbeitsspeicher verwendet, um grob den Netzbetreiber zu bestimmen. Solange die Datenbasis klein ist, sind alle Messungen sofort öffentlich, auch einzelne Fahrten mit Strecke und Zeitpunkten, aber ohne Namen oder Konto. Die Positionen liegen auf den Bahngleisen.',
 		loading: 'Lade…',
 		trackTitle: 'Fahrt starten',
 		trackDesc: 'Live-Messung während der Zugfahrt.',
@@ -37,10 +37,10 @@
 	};
 	const en: typeof de = {
 		intro1:
-			'This project measures how good the network connection on trains actually is — separately for DB Wi-Fi and your own mobile network. During a ride, latency, packet loss, location and, optionally, throughput are recorded and published anonymised as a heatmap.',
+			'This project measures how good the network connection on trains actually is — separately for DB Wi-Fi and your own mobile network. During a ride, latency, packet loss, location and, optionally, throughput are recorded and published without personal data as a heatmap and list of rides.',
 		privacyLabel: 'Privacy:',
 		intro2:
-			'IP addresses are never stored — they are only used in memory for the moment of the request to roughly determine the network operator. Only aggregates across several rides are published, never individual positions or timestamps.',
+			'IP addresses are never stored — they are only used in memory for the moment of the request to roughly determine the network operator. While the dataset is still small, all measurements are public right away, including individual rides with route and times, but without names or accounts. The positions lie on the railway tracks.',
 		loading: 'Loading…',
 		trackTitle: 'Start a ride',
 		trackDesc: 'Live measurement during the train ride.',
