@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -50,8 +51,12 @@ func cmdDiag(_ []string) error {
 		if err != nil {
 			fmt.Printf("  %s\n    Fehler: %v\n", u, err)
 			if strings.Contains(err.Error(), "no route to host") && runtime.GOOS == "darwin" {
-				fmt.Println("    Hinweis: macOS blockiert private Adressen ohne Berechtigung. Systemeinstellungen →")
-				fmt.Println("    Datenschutz & Sicherheit → Lokales Netzwerk → Terminal-App erlauben und neu starten.")
+				// Gleicher Fallback wie beim Tracken: Apple-signiertes curl darf ins lokale Netz.
+				if out, cerr := exec.Command("/usr/bin/curl", "-sS", "--max-time", "5", "-o", "/dev/null", "-w", "%{http_code}", u).Output(); cerr == nil {
+					fmt.Printf("    über curl: HTTP %s (die CLI nutzt beim Tracken automatisch diesen Weg)\n", strings.TrimSpace(string(out)))
+				} else {
+					fmt.Println("    über curl ebenfalls nicht erreichbar")
+				}
 			}
 			continue
 		}

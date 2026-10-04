@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -293,6 +294,8 @@ func (t *TripInfo) NextStop() *Stop {
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
+	// useCurl wird gesetzt, sobald macOS die direkte Verbindung blockiert ("no route to host").
+	useCurl atomic.Bool
 }
 
 // New erzeugt einen Client mit dem gegebenen Basis-URL (Standard https://iceportal.de,
@@ -308,6 +311,25 @@ func New(baseURL string) *Client {
 }
 
 func (c *Client) get(ctx context.Context, path string) ([]byte, error) {
+	if c.useCurl.Load() {
+		return curlGet(ctx, c.BaseURL+path)
+	}
+	data, err := c.getDirect(ctx, path)
+	if err != nil && runtime.GOOS == "darwin" && strings.Contains(err.Error(), "no route to host") {
+		// macOS 15+ (Local Network Privacy) blockiert private Adressen für unsignierte Programme,
+		// das Apple-signierte /usr/bin/curl darf sie aber erreichen. Ab jetzt immer curl verwenden.
+		if cdata, cerr := curlGet(ctx, c.BaseURL+path); cerr == nil {
+			c.useCurl.Store(true)
+			return cdata, nil
+		}
+	}
+	return data, err
+}
+
+// UsingCurl meldet, ob der Client auf den curl-Fallback umgeschaltet hat (für die Anzeige).
+func (c *Client) UsingCurl() bool { return c.useCurl.Load() }
+
+func (c *Client) getDirect(ctx context.Context, path string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)

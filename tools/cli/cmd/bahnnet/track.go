@@ -97,7 +97,7 @@ func cmdTrack(args []string) error {
 	quickTrip, _ := iceClient.FetchTripInfo(quickCtx)
 	quickCancel()
 
-	trainType, err := resolveTrainType(flags.train, quickTrip)
+	trainType, err := resolveTrainType(runCtx, flags.train, quickTrip)
 	if err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func trainLabel(t model.TrainType, number string) string {
 	return string(t)
 }
 
-func resolveTrainType(flagTrain string, trip *iceportal.TripInfo) (model.TrainType, error) {
+func resolveTrainType(ctx context.Context, flagTrain string, trip *iceportal.TripInfo) (model.TrainType, error) {
 	if flagTrain != "" {
 		tt, ok := validTrainType(strings.ToLower(flagTrain))
 		if !ok {
@@ -235,7 +235,7 @@ func resolveTrainType(flagTrain string, trip *iceportal.TripInfo) (model.TrainTy
 			return tt, nil
 		}
 	}
-	return promptTrainType()
+	return promptTrainType(ctx)
 }
 
 func mapIcePortalTrainType(raw string) model.TrainType {
@@ -255,12 +255,23 @@ func mapIcePortalTrainType(raw string) model.TrainType {
 	}
 }
 
-func promptTrainType() (model.TrainType, error) {
+func promptTrainType(ctx context.Context) (model.TrainType, error) {
 	fmt.Println("Zugtyp konnte nicht automatisch bestimmt werden. Bitte auswählen:")
 	fmt.Println("  [1] ICE   [2] IC/EC   [3] RE/RB   [4] S-Bahn   [5] Sonstiges")
 	fmt.Print("Auswahl: ")
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
+	// Eingabe in eigener Goroutine lesen, damit Strg-C (ctx) die Abfrage sofort abbricht.
+	lineCh := make(chan string, 1)
+	go func() {
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		lineCh <- line
+	}()
+	var line string
+	select {
+	case <-ctx.Done():
+		fmt.Println()
+		return "", fmt.Errorf("abgebrochen")
+	case line = <-lineCh:
+	}
 	switch strings.TrimSpace(line) {
 	case "1":
 		return model.TrainTypeICE, nil
