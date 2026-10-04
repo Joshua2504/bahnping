@@ -28,7 +28,7 @@ export class MailService {
   async reload(): Promise<void> {
     const stored = await loadSmtpSettings(this.db);
     if (stored && stored.mode === 'custom') {
-      let password: string | null = null;
+      let password: string | undefined;
       try {
         password = decryptSmtpPassword(this.cfg.APP_SECRET, stored);
       } catch {

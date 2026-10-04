@@ -82,7 +82,7 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   `packages/shared`, das parallel bearbeitet wird; Web-Client erweitert lokal, siehe `apps/web/src/lib/api.ts`).
   `serverTime` (ISO) ist die Serverzeit beim Erstellen der Antwort; der Client nutzt sie als nächsten
   `since`-Wert für inkrementelles Nachladen einer laufenden Fahrt (siehe `/trips/[id]`, Polling alle
-  10s). `since` filtert über `samples.created_at` (nicht `ts`), damit verspätet eingetroffene Samples
+  5 s). `since` filtert über `samples.created_at` (nicht `ts`), damit verspätet eingetroffene Samples
   mit älterem (korrigiertem) `ts` nicht übersprungen werden; `trip.sampleCount` zeigt dabei weiterhin
   die Gesamtzahl der Fahrt, nicht nur den neu geladenen Ausschnitt.
 

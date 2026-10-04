@@ -82,13 +82,13 @@ In der Live-Ansicht:
 
 ## Was gemessen wird
 
-- **Ping-Fenster** (alle 10 s): RTT min/median/p90/max, Jitter, Verlust – über die server-getriebenen
+- **Ping-Fenster** (alle 5 s, Ping jede Sekunde): RTT min/median/p90/max, Jitter, Verlust – über die server-getriebenen
   WebSocket-Pings (`/ws`), exakt wie im Browser (`PING_INTERVAL_MS`/`WINDOW_MS` aus
   `packages/shared`).
-- **Captive-Portal-Probe** (alle 30 s): `GET /api/net/probe`.
-- **Netzklasse** (alle 60 s): `GET /api/net/whoami`, signiertes Token wird an alle Samples der
+- **Captive-Portal-Probe** (alle 10 s): `GET /api/net/probe`.
+- **Netzklasse** (alle 30 s): `GET /api/net/whoami`, signiertes Token wird an alle Samples der
   Gültigkeitsdauer angehängt.
-- **Position**: aus der ICE-Portal-API (`GET /api1/rs/status`), wenn diese erreichbar ist und der
+- **Position**: aus der ICE-Portal-API (`GET /api1/rs/status`, abgefragt alle 2 s; Fahrtdaten alle 30 s), wenn diese erreichbar ist und der
   letzte erfolgreiche Abruf jünger als 15 s ist; sonst `posSource=none` (keine Position, auch kein
   GPS – das kann die CLI auf einem Laptop nicht).
 - **Speedtest**: auf Tastendruck oder per `--speedtest-every`, 4 parallele Download-/Upload-Streams,
@@ -96,7 +96,7 @@ In der Live-Ansicht:
 
 Alle Messungen werden zunächst in eine lokale Datei
 (`~/.local/state/bahnping/outbox-<fahrt-id>.jsonl`) geschrieben und von dort in Batches
-(≤ 500 Zeilen, alle 30 s oder ab 100 gepufferten Einträgen) hochgeladen. Bricht die CLI ab
+(≤ 500 Zeilen, alle 10 s oder ab 100 gepufferten Einträgen) hochgeladen. Bricht die CLI ab
 (Absturz, Verbindungsabbruch, Akku leer), sendet der nächste `bahnping track`-Lauf übrig
 gebliebene Dateien automatisch nach.
 

@@ -13,7 +13,7 @@ export interface WindowResult {
 	jitterMs: number | null;
 }
 
-/** Erwartete Anzahl Pings je Fenster (WINDOW_MS / PING_INTERVAL_MS = 5). */
+/** Erwartete Anzahl Pings je Fenster (WINDOW_MS / PING_INTERVAL_MS). */
 export const EXPECTED_PINGS_PER_WINDOW = Math.round(WINDOW_MS / PING_INTERVAL_MS);
 
 export class PingWindowAggregator {
@@ -41,7 +41,8 @@ export class PingWindowAggregator {
 	private flush(): void {
 		const rtts = this.rtts;
 		this.rtts = [];
-		const n = EXPECTED_PINGS_PER_WINDOW;
+		// Mehr Antworten als erwartet (Timer-Drift, Server mit kürzerem Intervall) zählen voll mit.
+		const n = Math.max(EXPECTED_PINGS_PER_WINDOW, rtts.length);
 		const lost = Math.max(0, n - rtts.length);
 
 		this.onWindow({

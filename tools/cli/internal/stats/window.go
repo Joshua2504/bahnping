@@ -11,7 +11,7 @@ import (
 	"github.com/treudler/bahnping-cli/internal/model"
 )
 
-// ExpectedPingsPerWindow = WINDOW_MS / PING_INTERVAL_MS = 5.
+// ExpectedPingsPerWindow = WINDOW_MS / PING_INTERVAL_MS.
 const ExpectedPingsPerWindow = model.WindowMs / model.PingIntervalMs
 
 // WindowResult entspricht WindowResult in windows.ts.
@@ -103,7 +103,11 @@ func maxFloat(values []float64) *float64 {
 // Compute berechnet ein WindowResult aus den im Fenster empfangenen RTTs (in
 // Empfangsreihenfolge), exakt wie PingWindowAggregator.flush() in windows.ts.
 func Compute(rtts []float64) WindowResult {
+	// Mehr Antworten als erwartet (Timer-Drift) zählen voll mit, wie in windows.ts.
 	n := ExpectedPingsPerWindow
+	if len(rtts) > n {
+		n = len(rtts)
+	}
 	lost := n - len(rtts)
 	if lost < 0 {
 		lost = 0

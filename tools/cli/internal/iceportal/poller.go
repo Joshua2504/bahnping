@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	statusPollInterval = 5 * time.Second
-	tripPollInterval   = 60 * time.Second
+	statusPollInterval = 2 * time.Second
+	tripPollInterval   = 30 * time.Second
 	// Bei Nichterreichbarkeit wird seltener erneut versucht.
 	unavailableRetryInterval = 30 * time.Second
 )

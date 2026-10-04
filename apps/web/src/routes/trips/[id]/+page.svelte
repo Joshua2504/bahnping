@@ -18,7 +18,7 @@
 	import { theme } from '#lib/theme.svelte.js';
 
 	const tripId = page.params.id as string;
-	const LIVE_POLL_MS = 10_000;
+	const LIVE_POLL_MS = 5000;
 	/** Bis zu dieser Anzahl Abschnitte wird die ICE-Liste komplett gezeigt, darüber eingeklappt. */
 	const ICE_LIST_COLLAPSED = 6;
 
