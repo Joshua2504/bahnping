@@ -28,7 +28,14 @@ export class MailService {
   async reload(): Promise<void> {
     const stored = await loadSmtpSettings(this.db);
     if (stored && stored.mode === 'custom') {
-      const password = decryptSmtpPassword(this.cfg.APP_SECRET, stored);
+      let password: string | null = null;
+      try {
+        password = decryptSmtpPassword(this.cfg.APP_SECRET, stored);
+      } catch {
+        // Passwort mit anderem APP_SECRET verschlüsselt (z.B. nach Rotation): nicht abstürzen,
+        // sondern ohne Passwort weiter; im Admin-Bereich neu eintragen.
+        console.warn('SMTP-Passwort nicht entschlüsselbar (APP_SECRET geändert?) – bitte im Admin-Bereich neu setzen');
+      }
       this.transporter = nodemailer.createTransport({
         host: stored.host,
         port: stored.port,

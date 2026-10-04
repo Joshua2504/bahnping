@@ -76,3 +76,8 @@ latency, packet loss, position, the ICE onboard portal status and, on request, t
   run `scripts/dev-up.sh` and open <http://localhost:4100>.
 
 The UI is available in German and English. Code comments and project docs are in German.
+
+## Lizenz / Licence
+
+[GNU Affero General Public License v3.0](LICENSE). Wer eine veränderte Version öffentlich als Dienst
+betreibt, muss den Quellcode dieser Version ebenfalls veröffentlichen.

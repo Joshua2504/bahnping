@@ -10,5 +10,6 @@
     "typecheck": "pnpm -r typecheck",
     "start": "scripts/dev-up.sh",
     "stop": "scripts/dev-down.sh"
-  }
+  },
+  "license": "AGPL-3.0-only"
 }
