@@ -126,6 +126,9 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
   Admins) → `200 SmtpTestResponse` (`{ ok: true, messageId }`) oder `502` mit verständlicher
   Fehlermeldung (Auth fehlgeschlagen, Verbindung abgelehnt, Zeitüberschreitung, Zertifikat
   ungültig), abgeleitet aus `err.code`/`responseCode`, ohne Interna zu verraten. Kein Rate-Limit (nur Admins).
+- `PUT /api/admin/legal` Body `LegalInfoUpdate` (`{ name, street, postalCity, country, email, phone,
+  contentResponsible, hoster, mailProvider }`, leere Strings = nicht gesetzt) → `200 LegalInfo`. Speichert
+  in `app_settings` (Key `legal`); Grundlage für `/impressum` und `/datenschutz`.
 
 ## Netz
 - `GET /api/net/whoami` → `200 WhoamiResponse`. Client-IP aus Socket bzw. `X-Forwarded-For` (nur wenn
@@ -165,6 +168,8 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
     `ping_window`-Samples mit gesetztem `iceState` (ohne ausgeschlossene Flags): `nSamples`, `nTrips`,
     `availPct` (Anteil Fenster mit `n > lost`, wie bei `/cells`), `lossPct`, `rttMedian`. Sortiert
     nach `ICE_STATE_ORDER`, unbekannte Werte am Ende. Vergleicht die Prognose der DB mit der Messung.
+- `GET /api/public/legal` → `200 LegalInfo` (Anbieterangaben für Impressum/Datenschutz, `updatedAt`
+  `null`, solange nichts gepflegt ist).
 - `GET /api/public/live` → `200 PublicLive` (`{ activeTrips, trains, generatedAt }`),
   `Cache-Control: public, max-age=10`, zusätzlich serverseitiger In-Memory-Cache über `LIVE_CACHE_MS`
   (10s), damit die 15s-Polling-Last der Live-Karte nicht pro Request neu berechnet wird.

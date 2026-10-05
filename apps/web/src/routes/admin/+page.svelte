@@ -1,11 +1,12 @@
 <script lang="ts">
-	// Admin-Seite: Review unbekannter/aller ASNs, Netzklasse per Hand setzen, SMTP-Konfiguration.
-	import { NET_CLASSES, type AdminAsn, type NetClass, type SmtpSecurity, type SmtpSettings } from '@bahn/shared';
+	// Admin-Seite: Review unbekannter/aller ASNs, Netzklasse per Hand setzen, SMTP-Konfiguration,
+	// Anbieterangaben für Impressum/Datenschutz.
+	import { NET_CLASSES, type AdminAsn, type LegalInfoUpdate, type NetClass, type SmtpSecurity, type SmtpSettings } from '@bahn/shared';
 	import { ApiError, api } from '#lib/api.js';
 	import { auth } from '#lib/auth.svelte.js';
 	import { i18n, netClassLabel, fmtDateTime } from '#lib/i18n.svelte.js';
 
-	let tab = $state<'asns' | 'smtp'>('asns');
+	let tab = $state<'asns' | 'smtp' | 'legal'>('asns');
 
 	// ---------- ASN-Review ----------
 
@@ -30,6 +31,7 @@
 		if (auth.me?.role === 'admin') {
 			void load();
 			void loadSmtp();
+			void loadLegal();
 		}
 	});
 
@@ -46,6 +48,41 @@
 			feedback = { ...feedback, [asn]: err instanceof ApiError ? (err.detail ?? err.title) : m.asns.saveError };
 		} finally {
 			saving = { ...saving, [asn]: false };
+		}
+	}
+
+	// ---------- Impressum/Datenschutz ----------
+
+	const LEGAL_FIELDS = ['name', 'street', 'postalCity', 'country', 'email', 'phone', 'contentResponsible', 'hoster', 'mailProvider'] as const;
+	let legal = $state<LegalInfoUpdate | null>(null);
+	let legalLoadError = $state<string | null>(null);
+	let legalSaving = $state(false);
+	let legalSaveMessage = $state<string | null>(null);
+	let legalSaveError = $state<string | null>(null);
+
+	async function loadLegal(): Promise<void> {
+		legalLoadError = null;
+		try {
+			const { updatedAt: _, ...rest } = await api.publicLegal();
+			legal = rest;
+		} catch (err) {
+			legalLoadError = err instanceof ApiError ? (err.detail ?? err.title) : m.legal.loadError;
+		}
+	}
+
+	async function saveLegal(): Promise<void> {
+		if (!legal) return;
+		legalSaving = true;
+		legalSaveMessage = null;
+		legalSaveError = null;
+		try {
+			const { updatedAt: _, ...rest } = await api.adminUpdateLegal(legal);
+			legal = rest;
+			legalSaveMessage = m.legal.saveSuccess;
+		} catch (err) {
+			legalSaveError = err instanceof ApiError ? (err.detail ?? err.title) : m.legal.saveError;
+		} finally {
+			legalSaving = false;
 		}
 	}
 
@@ -144,7 +181,7 @@
 		title: 'Admin',
 		adminOnly: 'Dieser Bereich ist nur für Admins.',
 		loading: 'Lade…',
-		tabs: { asns: 'ASN-Review', smtp: 'E-Mail-Versand (SMTP)' },
+		tabs: { asns: 'ASN-Review', smtp: 'E-Mail-Versand (SMTP)', legal: 'Impressum/Datenschutz' },
 		asns: {
 			filterLabel: 'Filter',
 			filterUnknown: 'nur unbekannte',
@@ -165,6 +202,26 @@
 			saving: 'Speichere…',
 			save: 'Speichern',
 			saved: (n: number) => `Gespeichert, ${n} Messwerte aktualisiert.`,
+			saveError: 'Speichern fehlgeschlagen',
+		},
+		legal: {
+			heading: 'Anbieterangaben',
+			intro: 'Erscheinen auf /impressum und als Verantwortlicher in /datenschutz. Leere Felder werden nicht angezeigt.',
+			loadError: 'Angaben konnten nicht geladen werden',
+			fields: {
+				name: 'Name (natürliche Person oder Firma)',
+				street: 'Straße und Hausnummer',
+				postalCity: 'PLZ und Ort',
+				country: 'Land',
+				email: 'E-Mail',
+				phone: 'Telefon (optional)',
+				contentResponsible: 'Verantwortlich nach § 18 Abs. 2 MStV (leer = Name)',
+				hoster: 'Hosting-Anbieter (Name, Anschrift)',
+				mailProvider: 'Mailversand über (leer = eigener Mailserver)',
+			},
+			saving: 'Speichere…',
+			save: 'Speichern',
+			saveSuccess: 'Gespeichert.',
 			saveError: 'Speichern fehlgeschlagen',
 		},
 		smtp: {
@@ -203,7 +260,7 @@
 		title: 'Admin',
 		adminOnly: 'This area is for admins only.',
 		loading: 'Loading…',
-		tabs: { asns: 'ASN review', smtp: 'Email delivery (SMTP)' },
+		tabs: { asns: 'ASN review', smtp: 'Email delivery (SMTP)', legal: 'Legal notice/privacy' },
 		asns: {
 			filterLabel: 'Filter',
 			filterUnknown: 'unknown only',
@@ -224,6 +281,26 @@
 			saving: 'Saving…',
 			save: 'Save',
 			saved: (n: number) => `Saved, ${n} samples updated.`,
+			saveError: 'Save failed',
+		},
+		legal: {
+			heading: 'Provider details',
+			intro: 'Shown on /impressum and as controller in /datenschutz. Empty fields are not displayed.',
+			loadError: 'Could not load details',
+			fields: {
+				name: 'Name (person or company)',
+				street: 'Street and number',
+				postalCity: 'Postcode and city',
+				country: 'Country',
+				email: 'Email',
+				phone: 'Phone (optional)',
+				contentResponsible: 'Responsible under § 18(2) MStV (empty = name)',
+				hoster: 'Hosting provider (name, address)',
+				mailProvider: 'Email sent via (empty = own mail server)',
+			},
+			saving: 'Saving…',
+			save: 'Save',
+			saveSuccess: 'Saved.',
 			saveError: 'Save failed',
 		},
 		smtp: {
@@ -275,6 +352,7 @@
 	<div class="app-nav" style="padding: 0; border: none; background: transparent; margin-bottom: 1rem">
 		<button class="btn {tab === 'asns' ? '' : 'secondary'}" onclick={() => (tab = 'asns')}>{m.tabs.asns}</button>
 		<button class="btn {tab === 'smtp' ? '' : 'secondary'}" onclick={() => (tab = 'smtp')}>{m.tabs.smtp}</button>
+		<button class="btn {tab === 'legal' ? '' : 'secondary'}" onclick={() => (tab = 'legal')}>{m.tabs.legal}</button>
 	</div>
 
 	{#if tab === 'asns'}
@@ -342,6 +420,29 @@
 						{/each}
 					</tbody>
 				</table>
+			</div>
+		{/if}
+	{:else if tab === 'legal'}
+		<h2>{m.legal.heading}</h2>
+		<p>{m.legal.intro}</p>
+
+		{#if legalLoadError}
+			<div class="notice error">{legalLoadError}</div>
+		{:else if legal === null}
+			<p>{m.loading}</p>
+		{:else}
+			<div class="card">
+				<div class="card-grid">
+					{#each LEGAL_FIELDS as f (f)}
+						<div class="field">
+							<label for="legal-{f}">{m.legal.fields[f]}</label>
+							<input id="legal-{f}" type={f === 'email' ? 'email' : 'text'} bind:value={legal[f]} maxlength={400} />
+						</div>
+					{/each}
+				</div>
+				<button class="btn" disabled={legalSaving} onclick={saveLegal}>{legalSaving ? m.legal.saving : m.legal.save}</button>
+				{#if legalSaveMessage}<div class="notice success">{legalSaveMessage}</div>{/if}
+				{#if legalSaveError}<div class="notice error">{legalSaveError}</div>{/if}
 			</div>
 		{/if}
 	{:else}

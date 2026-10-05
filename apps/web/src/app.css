@@ -556,3 +556,13 @@ th {
 		padding: 1.5rem;
 	}
 }
+
+/* ---------- Rechtstexte (Impressum, Datenschutz) ---------- */
+
+.legal {
+	max-width: 72ch;
+}
+
+.legal h2 {
+	margin-top: 1.6rem;
+}

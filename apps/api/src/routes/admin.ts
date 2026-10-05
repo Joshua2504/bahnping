@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { AdminAsnUpdate, SmtpSettingsUpdate, SmtpTestRequest, type AdminAsn, type SmtpSettings } from '@bahn/shared';
+import { AdminAsnUpdate, LegalInfoUpdate, SmtpSettingsUpdate, SmtpTestRequest, type AdminAsn, type SmtpSettings } from '@bahn/shared';
 import { asnCatalog, samples, users } from '../db/schema.js';
+import { saveLegalInfo } from '../lib/legalSettings.js';
 import { loadSmtpSettings, saveSmtpSettings, type StoredSmtpSettings } from '../lib/smtpSettings.js';
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
@@ -159,6 +160,12 @@ export function registerAdminRoutes(app: FastifyInstance): void {
 
     const envDefaults = { host: app.ctx.cfg.SMTP_HOST, port: app.ctx.cfg.SMTP_PORT, from: app.ctx.cfg.MAIL_FROM };
     reply.send(toSmtpSettings(stored, envDefaults));
+  });
+
+  app.put('/api/admin/legal', { preHandler: app.requireAdmin }, async (request, reply) => {
+    const body = parseOrProblem(LegalInfoUpdate, request.body, reply);
+    if (!body) return;
+    reply.send(await saveLegalInfo(db, body, request.userId!));
   });
 
   app.post('/api/admin/smtp/test', { preHandler: app.requireAdmin }, async (request, reply) => {

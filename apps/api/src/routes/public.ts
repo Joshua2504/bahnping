@@ -4,6 +4,7 @@ import { CellsQuery, ICE_STATE_ORDER, LIVE_CACHE_MS, LIVE_NET_WINDOW_MS, LIVE_PO
 import { parseOrProblem } from '../lib/validate.js';
 import { sendProblem } from '../lib/problem.js';
 import { deriveKey } from '../lib/hmac.js';
+import { loadLegalInfo } from '../lib/legalSettings.js';
 import { summarizeLiveTrains, type LiveTripRow } from '../lib/liveTrains.js';
 
 const EXCLUDED_FLAGS = ['out_of_bbox', 'bad_accuracy', 'implausible_speed', 'net_sig_invalid'];
@@ -12,6 +13,11 @@ const PERIOD_INTERVAL: Record<string, string> = { '7d': '7 days', '30d': '30 day
 
 export function registerPublicRoutes(app: FastifyInstance): void {
   const { dbClient, cfg } = app.ctx;
+
+  // Anbieterangaben für /impressum und /datenschutz (öffentlich, Pflichtangaben).
+  app.get('/api/public/legal', async (_request, reply) => {
+    reply.send(await loadLegalInfo(app.ctx.db));
+  });
 
   app.get('/api/public/cells', async (request, reply) => {
     const query = parseOrProblem(CellsQuery, request.query, reply);

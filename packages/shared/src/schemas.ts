@@ -466,3 +466,30 @@ export const Problem = z.object({
   errors: z.unknown().optional(),
 });
 export type Problem = z.infer<typeof Problem>;
+
+// ---------- Rechtliches: Impressum/Datenschutz ----------
+
+/**
+ * Anbieterangaben für Impressum (§ 5 DDG) und Verantwortlichen in der Datenschutzerklärung.
+ * Werden von Admins gepflegt (app_settings, Key "legal"), damit die Postanschrift nicht im Git landet.
+ * Leere Strings = nicht gesetzt.
+ */
+export const LegalInfo = z.object({
+  name: z.string().trim().max(200),
+  street: z.string().trim().max(200),
+  postalCity: z.string().trim().max(200),
+  country: z.string().trim().max(100),
+  email: z.union([z.literal(''), z.email().max(254)]),
+  phone: z.string().trim().max(50),
+  /** Verantwortlich für Inhalte nach § 18 Abs. 2 MStV, leer = wie `name` */
+  contentResponsible: z.string().trim().max(400),
+  /** Hosting-Anbieter (Auftragsverarbeiter), z.B. "Firma GmbH, Straße 1, 12345 Ort" */
+  hoster: z.string().trim().max(400),
+  /** SMTP-Dienst für den Mailversand, leer = eigener Mailserver */
+  mailProvider: z.string().trim().max(400),
+  updatedAt: z.string().nullable(),
+});
+export type LegalInfo = z.infer<typeof LegalInfo>;
+
+export const LegalInfoUpdate = LegalInfo.omit({ updatedAt: true });
+export type LegalInfoUpdate = z.infer<typeof LegalInfoUpdate>;

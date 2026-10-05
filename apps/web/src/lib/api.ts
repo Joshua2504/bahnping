@@ -8,6 +8,7 @@ import {
 	ApiTokenCreated,
 	ApiTokenInfo,
 	CellsResponse,
+	LegalInfo,
 	ConfirmRequest,
 	Me,
 	MeSettingsUpdate,
@@ -29,6 +30,7 @@ import {
 	type AdminAsnUpdate,
 	type ApiTokenCreate,
 	type CellsQuery,
+	type LegalInfoUpdate,
 	type SmtpSettingsUpdate,
 	type SmtpTestRequest,
 	type TripCreate,
@@ -153,6 +155,7 @@ export const api = {
 	publicStats: () => request('/api/public/stats', {}, PublicStats),
 	publicTrips: () => request('/api/public/trips', {}, z.array(Trip)),
 	publicLive: () => request('/api/public/live', {}, PublicLive),
+	publicLegal: () => request('/api/public/legal', {}, LegalInfo),
 
 	adminAsns: (filter: 'unknown' | 'all') =>
 		request(`/api/admin/asns?filter=${filter}`, {}, z.array(AdminAsn)),
@@ -161,5 +164,6 @@ export const api = {
 
 	adminGetSmtp: () => request('/api/admin/smtp', {}, SmtpSettings),
 	adminUpdateSmtp: (body: SmtpSettingsUpdate) => request('/api/admin/smtp', withBody('PUT', body), SmtpSettings),
+	adminUpdateLegal: (body: LegalInfoUpdate) => request('/api/admin/legal', withBody('PUT', body), LegalInfo),
 	adminTestSmtp: (body: SmtpTestRequest) => request('/api/admin/smtp/test', withBody('POST', body), SmtpTestResponse),
 };

@@ -34,6 +34,8 @@
 		submit: 'Anmeldelink senden',
 		waitAltcha: 'Bitte kurz warten, bis die Sicherheitsprüfung abgeschlossen ist.',
 		unknownError: 'Unbekannter Fehler',
+		privacyHint: 'Wie wir deine Daten verarbeiten, steht in der',
+		privacyLink: 'Datenschutzerklärung',
 	};
 	const en: typeof de = {
 		intro1:
@@ -56,6 +58,8 @@
 		submit: 'Send sign-in link',
 		waitAltcha: 'Please wait a moment until the security check has finished.',
 		unknownError: 'Unknown error',
+		privacyHint: 'How we process your data is described in the',
+		privacyLink: 'privacy policy',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
 
@@ -126,8 +130,17 @@
 			<input id="email" name="email" type="email" required bind:value={email} autocomplete="email" />
 		</div>
 		<altcha-widget challengeurl="/api/altcha/challenge" hidefooter></altcha-widget>
+		<p class="privacy-hint">{m.privacyHint} <a href="/datenschutz">{m.privacyLink}</a>.</p>
 		<button class="btn" type="submit" disabled={sending} style="margin-top: 0.8rem">
 			{sending ? m.sending : m.submit}
 		</button>
 	</form>
 {/if}
+
+<style>
+	.privacy-hint {
+		margin: 0.6rem 0 0;
+		font-size: 0.85rem;
+		color: var(--fg-dim);
+	}
+</style>

@@ -48,6 +48,8 @@
 		switchLang: 'Switch to English',
 		updateAvailable: 'Neue Version verfügbar.',
 		reload: 'Neu laden',
+		imprint: 'Impressum',
+		privacy: 'Datenschutz',
 	};
 	const en: typeof de = {
 		start: 'Home',
@@ -61,6 +63,8 @@
 		switchLang: 'Auf Deutsch umschalten',
 		updateAvailable: 'A new version is available.',
 		reload: 'Reload',
+		imprint: 'Legal notice',
+		privacy: 'Privacy',
 	};
 	const m = $derived(i18n.locale === 'de' ? de : en);
 
@@ -117,9 +121,27 @@
 		{/if}
 		{@render children()}
 	</main>
+	<footer class="app-footer">
+		<a href="/impressum">{m.imprint}</a>
+		<a href="/datenschutz">{m.privacy}</a>
+	</footer>
 </div>
 
 <style>
+	.app-footer {
+		display: flex;
+		justify-content: center;
+		gap: 1.25rem;
+		padding: 0.75rem max(0.85rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom))
+			max(0.85rem, env(safe-area-inset-left));
+		border-top: 1px solid var(--border);
+		font-size: 0.85rem;
+	}
+
+	.app-footer a {
+		color: var(--fg-dim);
+	}
+
 	.update-notice {
 		display: flex;
 		align-items: center;
