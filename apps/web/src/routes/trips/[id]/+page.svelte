@@ -476,10 +476,35 @@
 		return parts.length > 0 ? `${parts.join('  ')} Mbit/s` : '–';
 	}
 
-	/** Farbe der Streckenpunkte je Kartenmodus; Punkte ohne Wert werden grau. */
+	/** Farbe der Strecke (Linie und Punkte) je Kartenmodus; Abschnitte ohne Wert werden grau. */
 	function pointColor(mode: 'rtt' | 'speed'): maplibregl.ExpressionSpecification {
 		if (mode === 'speed') return ['case', ['==', ['typeof', ['get', 'speedKmh']], 'number'], SPEED_COLOR, '#94a3b8'];
 		return ['case', ['get', 'fullLoss'], '#ef4444', ['==', ['typeof', ['get', 'rtt']], 'number'], RTT_COLOR, '#94a3b8'];
+	}
+
+	type Sample = NonNullable<typeof data>['samples'][number];
+
+	/** Feature-Properties eines Messpunkts; werden auch von den Linienabschnitten übernommen. */
+	function sampleProps(s: Sample, last: boolean) {
+		return {
+			id: s.id,
+			ts: s.ts,
+			// Probes (HTTP-Checks) haben kein Ping-RTT; dann die HTTP-Latenz für die Farbe nehmen.
+			rtt: s.rttMedian ?? s.httpMs,
+			latencyKind: s.rttMedian !== null ? 'RTT' : s.httpMs !== null ? 'HTTP' : null,
+			loss: s.n !== null && s.n > 0 ? (100 * (s.lost ?? 0)) / s.n : null,
+			speedKmh: s.speedMps !== null ? s.speedMps * 3.6 : null,
+			netClass: s.netClass,
+			asn: s.asn,
+			kind: s.kind,
+			iceState: s.iceState,
+			fullLoss: (s.n !== null && s.n > 0 && s.lost === s.n) || s.ok === false,
+			last,
+			downBps: s.downBps,
+			upBps: s.upBps,
+			// Badge-Text neben der Strecke, z.B. "↓ 4,3  ↑ 1,2".
+			dlLabel: s.kind === 'speedtest' ? speedtestLabel(s.downBps, s.upBps) : null,
+		};
 	}
 
 	function pointGeoJson() {
@@ -488,28 +513,48 @@
 			type: 'FeatureCollection' as const,
 			features: samples.map((s, i) => ({
 				type: 'Feature' as const,
-				properties: {
-					id: s.id,
-					ts: s.ts,
-					// Probes (HTTP-Checks) haben kein Ping-RTT; dann die HTTP-Latenz für die Farbe nehmen.
-					rtt: s.rttMedian ?? s.httpMs,
-					latencyKind: s.rttMedian !== null ? 'RTT' : s.httpMs !== null ? 'HTTP' : null,
-					loss: s.n !== null && s.n > 0 ? (100 * (s.lost ?? 0)) / s.n : null,
-					speedKmh: s.speedMps !== null ? s.speedMps * 3.6 : null,
-					netClass: s.netClass,
-					asn: s.asn,
-					kind: s.kind,
-					iceState: s.iceState,
-					fullLoss: (s.n !== null && s.n > 0 && s.lost === s.n) || s.ok === false,
-					last: i === samples.length - 1,
-					downBps: s.downBps,
-					upBps: s.upBps,
-					// Badge-Text neben der Strecke, z.B. "↓ 4,3  ↑ 1,2".
-					dlLabel: s.kind === 'speedtest' ? speedtestLabel(s.downBps, s.upBps) : null,
-				},
+				properties: sampleProps(s, i === samples.length - 1),
 				geometry: { type: 'Point' as const, coordinates: [s.lon as number, s.lat as number] },
 			})),
 		};
+	}
+
+	/** Ab dieser Lücke (Zeit oder Strecke) zwischen zwei Messpunkten wird die Linie gestrichelt. */
+	const LINE_GAP_MS = 5 * 60_000;
+	const LINE_GAP_KM = 15;
+
+	function distanceKm(a: Sample, b: Sample): number {
+		const rad = Math.PI / 180;
+		const dLat = ((b.lat as number) - (a.lat as number)) * rad;
+		const dLon = ((b.lon as number) - (a.lon as number)) * rad;
+		const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat as number) * rad) * Math.cos((b.lat as number) * rad) * Math.sin(dLon / 2) ** 2;
+		return 12_742 * Math.asin(Math.sqrt(h));
+	}
+
+	/**
+	 * Strecke als Linie: ein Abschnitt je zwei aufeinanderfolgende Messpunkte, gefärbt nach dem
+	 * Startpunkt. Abschnitte über größere Lücken bekommen `gap` und werden neutral gestrichelt.
+	 */
+	function lineGeoJson() {
+		const samples = (data?.samples ?? []).filter((s) => s.lat !== null && s.lon !== null && s.kind !== 'speedtest');
+		const features = [];
+		for (let i = 0; i + 1 < samples.length; i++) {
+			const a = samples[i];
+			const b = samples[i + 1];
+			const gap = new Date(b.ts).getTime() - new Date(a.ts).getTime() > LINE_GAP_MS || distanceKm(a, b) > LINE_GAP_KM;
+			features.push({
+				type: 'Feature' as const,
+				properties: { ...sampleProps(a, false), gap },
+				geometry: {
+					type: 'LineString' as const,
+					coordinates: [
+						[a.lon as number, a.lat as number],
+						[b.lon as number, b.lat as number],
+					],
+				},
+			});
+		}
+		return { type: 'FeatureCollection' as const, features };
 	}
 
 	function fitToRoute(animate = false): void {
@@ -540,6 +585,8 @@
 		return createBaseStyle(
 			{
 				route: { type: 'geojson', data: pointGeoJson() },
+				// Ohne Vereinfachung, sonst fallen kurze Abschnitte (dichte Messpunkte) beim Herauszoomen weg.
+				'route-line': { type: 'geojson', data: lineGeoJson(), tolerance: 0 },
 				stops: { type: 'geojson', data: stopsGeoJson() },
 			},
 			[
@@ -574,15 +621,53 @@
 					},
 				},
 				{
+					// Dunkle/helle Kontur, damit die Linie sich vom Kartenhintergrund abhebt.
+					id: 'route-line-casing',
+					type: 'line',
+					source: 'route-line',
+					filter: ['!', ['get', 'gap']],
+					layout: { 'line-cap': 'round', 'line-join': 'round' },
+					paint: {
+						'line-color': stroke,
+						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 10, 6, 15, 10],
+						'line-opacity': 0.8,
+					},
+				},
+				{
+					id: 'route-line-gaps',
+					type: 'line',
+					source: 'route-line',
+					filter: ['get', 'gap'],
+					paint: {
+						'line-color': '#94a3b8',
+						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.5, 15, 3],
+						'line-dasharray': [2, 2],
+						'line-opacity': 0.7,
+					},
+				},
+				{
+					id: 'route-line',
+					type: 'line',
+					source: 'route-line',
+					filter: ['!', ['get', 'gap']],
+					layout: { 'line-cap': 'round', 'line-join': 'round' },
+					paint: {
+						'line-color': pointColor(mapMode),
+						'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 10, 4, 15, 7],
+					},
+				},
+				{
+					// Einzelne Messpunkte erst bei starkem Zoom, darunter reicht die Linie.
 					id: 'route-points',
 					type: 'circle',
 					source: 'route',
+					minzoom: 12,
 					filter: ['!=', ['get', 'kind'], 'speedtest'],
 					paint: {
-						'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 12, 5, 16, 7],
+						'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 6],
 						'circle-color': pointColor(mapMode),
-						'circle-stroke-color': ['case', ['get', 'fullLoss'], dark ? '#000000' : '#7f1d1d', stroke],
-						'circle-stroke-width': ['case', ['get', 'fullLoss'], 1.5, 0.75],
+						'circle-stroke-color': stroke,
+						'circle-stroke-width': 1,
 					},
 				},
 				{
@@ -673,7 +758,7 @@
 		m.on('styleimagemissing', (e) => {
 			if (e.id === 'speedtest-badge' && !m.hasImage(e.id)) addBadgeImage(m);
 		});
-		attachHoverPopup(m, ['route-speedtest-badges', 'route-speedtests', 'route-points'], (f) => {
+		attachHoverPopup(m, ['route-speedtest-badges', 'route-speedtests', 'route-points', 'route-line'], (f) => {
 			const p = f.properties as Record<string, unknown>;
 			// `m` ist hier die Karte; Texte daher über `txt`.
 			const txt = i18n.locale === 'de' ? de : en;
@@ -736,6 +821,8 @@
 		if (!map) return;
 		const source = map.getSource('route');
 		if (source && source.type === 'geojson') (source as maplibregl.GeoJSONSource).setData(pointGeoJson());
+		const lineSource = map.getSource('route-line');
+		if (lineSource && lineSource.type === 'geojson') (lineSource as maplibregl.GeoJSONSource).setData(lineGeoJson());
 		// Halte können sich beim Live-Nachladen ändern (z.B. tatsächliche Zeiten/Gleise).
 		const stopsSource = map.getSource('stops');
 		if (stopsSource && stopsSource.type === 'geojson') (stopsSource as maplibregl.GeoJSONSource).setData(stopsGeoJson());
@@ -864,11 +951,12 @@
 		});
 	});
 
-	// Kartenmodus (Latenz/Tempo) umgeschaltet: nur die Punktfarbe tauschen, kein neuer Style.
+	// Kartenmodus (Latenz/Tempo) umgeschaltet: nur Linien- und Punktfarbe tauschen, kein neuer Style.
 	$effect(() => {
 		const mode = mapMode;
 		untrack(() => {
 			if (map?.getLayer('route-points')) map.setPaintProperty('route-points', 'circle-color', pointColor(mode));
+			if (map?.getLayer('route-line')) map.setPaintProperty('route-line', 'line-color', pointColor(mode));
 		});
 	});
 
