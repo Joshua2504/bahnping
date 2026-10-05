@@ -66,7 +66,7 @@
 				h: '7. Veröffentlichung der Messdaten',
 				p: [
 					'Zweck des Projekts ist die Veröffentlichung. Solange die Datenbasis klein ist, sind alle Messungen sofort öffentlich: als Karte und als einzelne Fahrten mit Strecke, Zeitpunkten, Zug und Messwerten, aber ohne Namen, E-Mail-Adresse oder Konto-Kennung. Die Positionen liegen auf Bahnstrecken. Laufende Fahrten erscheinen ohne Personenbezug auf der Live-Karte; das kannst du unter „Konto“ abschalten. Später werden nur noch zusammengefasste Werte veröffentlicht.',
-					'Bitte beachte: Wer weiß, dass du zu einer bestimmten Zeit in einem bestimmten Zug warst, kann eine öffentliche Fahrt möglicherweise dir zuordnen. Wenn du das nicht möchtest, starte für diese Fahrt keine Messung oder schreib uns, dann löschen wir sie.',
+					'Bitte beachte: Wer weiß, dass du zu einer bestimmten Zeit in einem bestimmten Zug warst, kann eine öffentliche Fahrt möglicherweise dir zuordnen. Wenn du das nicht möchtest, starte für diese Fahrt keine Messung oder lösche sie anschließend unter „Konto“.',
 				],
 			},
 			{
@@ -93,14 +93,14 @@
 				list: [
 					`Anmeldelinks: ${magicMinutes} Minuten, danach gelöscht.`,
 					`Sitzungen: bis zur Abmeldung oder ${sessionDays} Tage nach letzter Nutzung.`,
-					'Konto, Fahrten und Messwerte: bis du dein Konto löschst (einzelne Fahrten auf Anfrage). Die Löschung des Kontos entfernt sofort alle zugehörigen Fahrten und Messwerte.',
+					'Konto, Fahrten und Messwerte: bis du sie oder dein Konto löschst. Die Löschung des Kontos entfernt sofort alle zugehörigen Fahrten und Messwerte.',
 					'Versendete Mails werden von uns nicht archiviert.',
 				],
 			},
 			{
 				h: '11. Deine Rechte',
 				p: [
-					'Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21 DSGVO). Vieles davon kannst du selbst unter „Konto“ erledigen: Daten exportieren (JSON), das Konto samt aller Fahrten löschen und die Live-Karte abschalten. Für alles Weitere genügt eine E-Mail an die oben genannte Adresse.',
+					'Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch gegen Verarbeitungen auf Grundlage berechtigter Interessen (Art. 21 DSGVO). Vieles davon kannst du selbst unter „Konto“ erledigen: Daten exportieren (JSON), einzelne Fahrten oder das Konto samt aller Fahrten löschen und die Live-Karte abschalten. Für alles Weitere genügt eine E-Mail an die oben genannte Adresse.',
 					'Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren, insbesondere in dem Bundesland bzw. Mitgliedstaat deines Wohnorts.',
 				],
 			},
@@ -157,7 +157,7 @@
 				h: '7. Publication of measurements',
 				p: [
 					'The purpose of the project is publication. While the dataset is small, all measurements are public right away: as a map and as individual rides with route, times, train and measurements, but without name, email address or account ID. Positions lie on railway lines. Ongoing rides appear on the live map without personal reference; you can turn this off under "Account". Later, only aggregated values will be published.',
-					'Please note: someone who knows that you were on a particular train at a particular time may be able to link a public ride to you. If you do not want that, do not start a measurement for that ride, or email us and we will delete it.',
+					'Please note: someone who knows that you were on a particular train at a particular time may be able to link a public ride to you. If you do not want that, do not start a measurement for that ride, or delete it afterwards under "Account".',
 				],
 			},
 			{
@@ -182,14 +182,14 @@
 				list: [
 					`Sign-in links: ${magicMinutes} minutes, then deleted.`,
 					`Sessions: until you sign out or ${sessionDays} days after last use.`,
-					'Account, rides and measurements: until you delete your account (individual rides on request). Deleting the account immediately removes all associated rides and measurements.',
+					'Account, rides and measurements: until you delete them or your account. Deleting the account immediately removes all associated rides and measurements.',
 					'We do not archive emails sent.',
 				],
 			},
 			{
 				h: '11. Your rights',
 				p: [
-					'You have the right of access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20) and to object to processing based on legitimate interests (Art. 21 GDPR). Much of this you can do yourself under "Account": export your data (JSON), delete your account including all rides, and turn off the live map. For anything else, an email to the address above is enough.',
+					'You have the right of access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20) and to object to processing based on legitimate interests (Art. 21 GDPR). Much of this you can do yourself under "Account": export your data (JSON), delete individual rides or your account including all rides, and turn off the live map. For anything else, an email to the address above is enough.',
 					'You may also lodge a complaint with a data protection supervisory authority, in particular in the state or member state of your residence.',
 				],
 			},

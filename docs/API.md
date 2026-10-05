@@ -168,6 +168,8 @@ Bearer-Token selbst (sonst `403`) – ein gestohlenes Token könnte sich sonst s
     `ping_window`-Samples mit gesetztem `iceState` (ohne ausgeschlossene Flags): `nSamples`, `nTrips`,
     `availPct` (Anteil Fenster mit `n > lost`, wie bei `/cells`), `lossPct`, `rttMedian`. Sortiert
     nach `ICE_STATE_ORDER`, unbekannte Werte am Ende. Vergleicht die Prognose der DB mit der Messung.
+- `DELETE /api/trips/:id` (nur Cookie-Session, eigene Fahrt) → `204`. Löscht Fahrt, Halte und alle
+  Samples. `404` bei fremder/unbekannter Fahrt, `409` solange die Fahrt `active` ist.
 - `GET /api/public/legal` → `200 LegalInfo` (Anbieterangaben für Impressum/Datenschutz, `updatedAt`
   `null`, solange nichts gepflegt ist).
 - `GET /api/public/live` → `200 PublicLive` (`{ activeTrips, trains, generatedAt }`),

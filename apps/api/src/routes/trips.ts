@@ -178,6 +178,28 @@ export function registerTripRoutes(app: FastifyInstance): void {
     reply.send(toTrip(row.trip, Number(row.sampleCount)));
   });
 
+  // Eigene Fahrt samt Messwerten (Cascade) und Halten löschen. Nur per Cookie (wie Kontolöschung),
+  // laufende Fahrten erst beenden, sonst laufen Uploads des Trackers ins Leere.
+  app.delete('/api/trips/:id', { preHandler: [app.requireAuth, app.requireCookieAuth] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const rows = await db
+      .select({ status: trips.status })
+      .from(trips)
+      .where(and(eq(trips.id, id), eq(trips.userId, request.userId!)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) {
+      sendProblem(reply, 404, 'Fahrt nicht gefunden');
+      return;
+    }
+    if (row.status === 'active') {
+      sendProblem(reply, 409, 'Fahrt läuft noch', { detail: 'Laufende Fahrten bitte erst beenden.' });
+      return;
+    }
+    await db.delete(trips).where(and(eq(trips.id, id), eq(trips.userId, request.userId!)));
+    reply.code(204).send();
+  });
+
   // Nachträgliche Korrektur (z.B. Zugnummer erst aus dem ICE-Portal bekannt); auch per Bearer-Token nutzbar.
   app.patch('/api/trips/:id', { preHandler: app.requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };

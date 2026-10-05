@@ -130,6 +130,7 @@ export const api = {
 	updateTrip: (id: string, body: TripUpdateBody) => request(`/api/trips/${id}`, withBody('PATCH', body), Trip),
 	getTripSamples: (id: string, since?: string) =>
 		request(`/api/trips/${id}/samples${since ? `?since=${encodeURIComponent(since)}` : ''}`, {}, TripSamples),
+	deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, withBody('DELETE')),
 	endTrip: (id: string, body: TripEndBody) => request(`/api/trips/${id}/end`, withBody('POST', body), Trip),
 	uploadSamples: (id: string, samples: Sample[]) =>
 		request(`/api/trips/${id}/samples`, withBody('POST', { samples }), SampleBatchResponse),

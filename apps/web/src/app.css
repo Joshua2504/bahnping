@@ -566,3 +566,8 @@ th {
 .legal h2 {
 	margin-top: 1.6rem;
 }
+
+.btn.trip-delete {
+	padding: 0.3rem 0.65rem;
+	font-size: 0.85rem;
+}

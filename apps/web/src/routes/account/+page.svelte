@@ -25,6 +25,10 @@
 		livePublicCheckbox: 'Meine laufenden Fahrten anonymisiert auf der öffentlichen Live-Karte zeigen',
 		tripsTitle: 'Eigene Fahrten',
 		noTrips: 'Noch keine Fahrten.',
+		tripDelete: 'Löschen',
+		tripDeleteConfirm: 'Wirklich?',
+		tripDeleteActive: 'Laufende Fahrt erst beenden',
+		tripDeleteError: 'Löschen fehlgeschlagen',
 		colStart: 'Start',
 		colTrainType: 'Zugtyp',
 		colNumber: 'Nummer',
@@ -93,6 +97,10 @@
 		livePublicCheckbox: 'Show my running rides anonymised on the public live map',
 		tripsTitle: 'Your rides',
 		noTrips: 'No rides yet.',
+		tripDelete: 'Delete',
+		tripDeleteConfirm: 'Really?',
+		tripDeleteActive: 'End the ride first',
+		tripDeleteError: 'Deletion failed',
 		colStart: 'Start',
 		colTrainType: 'Train type',
 		colNumber: 'Number',
@@ -153,6 +161,28 @@
 	let nameSuccess = $state(false);
 
 	let trips = $state<Trip[] | null>(null);
+	// Zweistufiges Löschen je Fahrt: erster Klick merkt die ID, zweiter löscht.
+	let confirmTripId = $state<string | null>(null);
+	let deletingTripId = $state<string | null>(null);
+	let tripDeleteError = $state<string | null>(null);
+
+	async function deleteTrip(id: string): Promise<void> {
+		if (confirmTripId !== id) {
+			confirmTripId = id;
+			return;
+		}
+		deletingTripId = id;
+		tripDeleteError = null;
+		try {
+			await api.deleteTrip(id);
+			trips = (trips ?? []).filter((t) => t.id !== id);
+		} catch (err) {
+			tripDeleteError = err instanceof ApiError ? (err.detail ?? err.title) : m.tripDeleteError;
+		} finally {
+			deletingTripId = null;
+			confirmTripId = null;
+		}
+	}
 	let tripsError = $state<string | null>(null);
 
 	let deleteStep = $state(0);
@@ -373,6 +403,7 @@
 		{:else if trips.length === 0}
 			<p>{m.noTrips}</p>
 		{:else}
+			{#if tripDeleteError}<div class="notice error">{tripDeleteError}</div>{/if}
 			<table>
 				<thead>
 					<tr>
@@ -381,6 +412,7 @@
 						<th>{m.colNumber}</th>
 						<th>{m.colStatus}</th>
 						<th>{m.colSamples}</th>
+						<th></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -394,6 +426,16 @@
 								{#if trip.status === 'active'}<span class="live-badge">LIVE</span>{/if}
 							</td>
 							<td>{trip.sampleCount ?? '–'}</td>
+							<td>
+								<button
+									class="btn {confirmTripId === trip.id ? 'danger' : 'secondary'} trip-delete"
+									disabled={trip.status === 'active' || deletingTripId === trip.id}
+									title={trip.status === 'active' ? m.tripDeleteActive : undefined}
+									onclick={() => deleteTrip(trip.id)}
+								>
+									{confirmTripId === trip.id ? m.tripDeleteConfirm : m.tripDelete}
+								</button>
+							</td>
 						</tr>
 					{/each}
 				</tbody>
