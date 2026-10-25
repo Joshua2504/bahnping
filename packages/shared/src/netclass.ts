@@ -31,6 +31,8 @@ export const NET_CLASS_LABELS: Record<NetClass, string> = {
 export const ASN_SEED: ReadonlyArray<{ asn: number; name: string; netClass: NetClass }> = [
   // Backhaul des WIFIonICE, beobachtet am 2026-10-04 im ICE 1077 (Baureihe 412, ICE 4)
   { asn: 214498, name: 'McLaren Applied', netClass: 'db_wlan' },
+  // Ebenfalls WIFIonICE-Backhaul, beobachtet am 2026-10-25 im ICE 200 (Triebzug 9463, Baureihe 412)
+  { asn: 398830, name: 'ICOMERA', netClass: 'db_wlan' },
   { asn: 3320, name: 'Deutsche Telekom AG', netClass: 'mobile_telekom' },
   { asn: 3209, name: 'Vodafone GmbH', netClass: 'mobile_vodafone' },
   { asn: 6805, name: 'Telefonica Germany GmbH & Co. OHG', netClass: 'mobile_o2' },
