@@ -342,17 +342,20 @@ export function registerTripRoutes(app: FastifyInstance): void {
 
     const stopRows = await db.select().from(tripStops).where(eq(tripStops.tripId, tripId)).orderBy(asc(tripStops.seq));
 
+    // Genau eine Zeile pro ASN (das Frontend nutzt die ASN als Schlüssel). Samples einer ASN können
+    // verschiedene Klassen tragen (z. B. vor/nach einer Neuzuordnung oder net_sig_invalid), dann
+    // gilt die häufigste.
     const asnStats = await db
       .select({
         asn: samples.asn,
-        netClass: samples.netClass,
+        netClass: sql<string>`mode() within group (order by ${samples.netClass})`.as('net_class'),
         name: asnCatalog.name,
         samples: sql<number>`count(${samples.id})`.as('n_samples'),
       })
       .from(samples)
       .leftJoin(asnCatalog, eq(asnCatalog.asn, samples.asn))
       .where(and(eq(samples.tripId, tripId), isNotNull(samples.asn)))
-      .groupBy(samples.asn, samples.netClass, asnCatalog.name)
+      .groupBy(samples.asn, asnCatalog.name)
       .orderBy(desc(sql`count(${samples.id})`));
 
     // Bei `since` enthält `sampleRows` nur den neuen Ausschnitt; `trip.sampleCount` soll aber
